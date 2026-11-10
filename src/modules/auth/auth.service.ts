@@ -1,0 +1,683 @@
+import { eq } from "drizzle-orm";
+import { config } from "@/config";
+import { TTL } from "@/constants";
+import { EmailJobNames } from "@/enums";
+import { AuthLoginTypes, JwtAction } from "@/enums/auth/auth.enums";
+import {
+	generateAuthenticatedData,
+	generateAuthId,
+	generateAuthTokens,
+	generateOTP,
+	generateOTPId,
+	grabUserIdFromAuthId,
+	throwBadRequestError,
+	throwNotFoundError,
+	throwUnauthorizedError,
+	withPresignedUrl,
+} from "@/helpers";
+import type { IAuthData } from "@/interfaces";
+import { SessionRegistryService } from "@/modules/user/session-registry.service";
+import { users } from "@/modules/user/user.model";
+import { UserRepository } from "@/modules/user/user.repository";
+import { user_roles } from "@/modules/user/user-role.model";
+import { UserRoleRepository } from "@/modules/user/user-role.repository";
+import {
+	CacheService,
+	EmailQueueService,
+	EncryptionService,
+	JwtService,
+} from "@/services";
+import type { ILoginDataWithMetadata, ISignupDataWithMetadata } from "@/shared";
+
+export class AuthService {
+	private static instance: AuthService;
+
+	private readonly emailQueueService: EmailQueueService;
+	private readonly jwtService: JwtService;
+	private readonly encryptionService: EncryptionService;
+	private readonly cacheService: CacheService;
+	private readonly userRepo: UserRepository;
+	private readonly userRoleRepo: UserRoleRepository;
+
+	static getInstance(): AuthService {
+		if (!this.instance) {
+			this.instance = new AuthService();
+		}
+		return this.instance;
+	}
+
+	constructor() {
+		this.cacheService = CacheService.getInstance();
+		this.emailQueueService = EmailQueueService.getInstance();
+		this.jwtService = JwtService.getInstance();
+		this.encryptionService = EncryptionService.getInstance();
+		this.userRepo = UserRepository.getInstance();
+		this.userRoleRepo = UserRoleRepository.getInstance();
+	}
+
+	signup = async (data: ISignupDataWithMetadata) => {
+		/* @info - Email uniqueness is case-insensitive (migration 0020);
+		 * normalize here or Test@mail.com and test@mail.com become two accounts. */
+		const email = data.email.toLowerCase();
+
+		const existing = await this.userRepo.findOne(eq(users.email, email));
+		if (existing) throwBadRequestError("Email already exists");
+
+		const authId = generateAuthId();
+		const otpId = generateOTPId();
+		const otp = generateOTP();
+
+		const cacheData = {
+			authId,
+			otpId,
+			firstName: data.firstName,
+			lastName: data.lastName,
+			email,
+			action: JwtAction.VERIFY_EMAIL,
+			role: data.role,
+			password: this.encryptionService.encrypt(data.password),
+		};
+
+		await Promise.all([
+			this.cacheService.set(authId, cacheData, TTL.IN_30_MINUTES),
+			this.cacheService.set(
+				otpId,
+				{ otp: this.encryptionService.encrypt(otp) },
+				TTL.IN_30_MINUTES,
+			),
+		]);
+
+		this.emailQueueService.add(EmailJobNames.VERIFY_OTP as any, {
+			message: {
+				to: email,
+				subject: "Verify your email",
+			},
+			template: "verify-otp" as any,
+			locals: {
+				otp,
+				name: data.firstName,
+				expiryMinutes: TTL.IN_30_MINUTES / 60,
+				timestamp: new Date().toISOString(),
+				ipAddress: data.ipAddress,
+				location: data.location,
+				device: data.userAgent,
+			},
+		});
+
+		const token = this.jwtService.generateToken(authId);
+		return { token };
+	};
+
+	login = async (data: ILoginDataWithMetadata) => {
+		const { password, loginType } = data;
+		/* @info - Normalize: stored emails are lowercase (migration 0020) */
+		const email = data.email.toLowerCase();
+
+		const user = await this.userRepo.findOne(eq(users.email, email));
+		if (!user) throwNotFoundError("Invalid email or password");
+
+		const userAny = user as any;
+		if (userAny.deletedAt) throwNotFoundError("Invalid email or password");
+		if (userAny.suspendedAt)
+			throwUnauthorizedError("This account is suspended. Contact support.");
+
+		/* @info - Passwordless OTP login: email a code, verify via /verify-email (AUTHENTICATE) */
+		if (loginType === AuthLoginTypes.OTP) {
+			if (!userAny.passwordHash)
+				throwNotFoundError("Invalid email or password");
+
+			const authId = generateAuthId(user!.id.toString());
+			const otpId = generateOTPId();
+			const otp = generateOTP();
+
+			const cacheData = {
+				authId,
+				otpId,
+				firstName: userAny.firstName,
+				lastName: userAny.lastName,
+				email: userAny.email,
+				action: JwtAction.AUTHENTICATE,
+				userType: "user",
+			};
+
+			await Promise.all([
+				this.cacheService.set(authId, cacheData, TTL.IN_30_MINUTES),
+				this.cacheService.set(
+					otpId,
+					{ otp: this.encryptionService.encrypt(otp) },
+					TTL.IN_30_MINUTES,
+				),
+			]);
+
+			this.emailQueueService.add(EmailJobNames.VERIFY_OTP as any, {
+				message: { to: email, subject: "Your login code" },
+				template: "verify-otp" as any,
+				locals: {
+					otp,
+					name: userAny.firstName,
+					expiryMinutes: TTL.IN_30_MINUTES / 60,
+					timestamp: new Date().toISOString(),
+					ipAddress: data.ipAddress,
+					location: data.location,
+					device: data.userAgent,
+				},
+			});
+
+			const token = this.jwtService.generateToken(authId);
+			return { message: "Login code sent", token };
+		}
+
+		if (!userAny.passwordHash) {
+			throwNotFoundError("Invalid email or password");
+		}
+
+		const isPasswordValid = await this.encryptionService.compare(
+			password,
+			userAny.passwordHash,
+		);
+		if (!isPasswordValid) throwUnauthorizedError("Invalid email or password");
+
+		const authId = generateAuthId(user!.id.toString());
+
+		/* Get user's roles for the JWT — may be empty for new users who haven't picked a role */
+		const userRoles = await this.userRoleRepo.findMany(
+			eq(user_roles.userId, user!.id),
+		);
+		const primaryRole = userRoles[0]?.role ?? "";
+
+		const {
+			passwordHash: _,
+			deleted_at: __,
+			hash: ___,
+			...sanitized
+		} = userAny;
+
+		await this.cacheService.set(
+			authId,
+			{ ...sanitized, roles: userRoles.map((r) => r.role) },
+			TTL.IN_30_MINUTES,
+		);
+
+		await this.userRepo.update(user!.id, {
+			lastLoginAt: new Date(),
+		} as any);
+
+		const authenticatedUser = generateAuthenticatedData(sanitized);
+		const tokens = await generateAuthTokens(authId, primaryRole);
+
+		/* @info - Session registry metadata (best-effort) */
+		try {
+			const { refreshId } = this.jwtService.verifyToken(tokens.refreshToken);
+			if (refreshId) {
+				await SessionRegistryService.getInstance().register(refreshId, {
+					userAgent: data.userAgent,
+					ipAddress: data.ipAddress,
+					location: data.location,
+				});
+			}
+		} catch {
+			/* registry never blocks login */
+		}
+
+		return {
+			message: "Login successful",
+			user: await withPresignedUrl<any>(
+				{
+					...authenticatedUser,
+					roles: userRoles.map((r) => r.role),
+				},
+				"avatarUrl",
+			),
+			...tokens,
+		};
+	};
+
+	refresh = async (refreshToken: string) => {
+		const { authId, refreshId, userType } =
+			this.jwtService.verifyToken(refreshToken);
+		if (!refreshId) throwUnauthorizedError("Invalid refresh token.");
+
+		const exists = await this.cacheService.redis.exists(refreshId);
+		if (!exists) {
+			/* @info - Rotation grace window: refresh tokens rotate on every
+			 * call, so a concurrent refresh (session route + parallel 401s,
+			 * second tab) can consume the token a moment before this request.
+			 * The consumed id is mapped to its successor for ~45s — hand the
+			 * successor back instead of killing the session. Only a token
+			 * whose successor is ALSO gone (really expired / logged out)
+			 * reaches the expired error below. */
+			const rotated = await this.cacheService.redis.get(`rotated:${refreshId}`);
+			if (rotated) {
+				const mapped = JSON.parse(rotated) as {
+					refreshToken: string;
+					authId: string;
+				};
+				const accessToken = this.jwtService.generateToken(
+					mapped.authId ?? authId,
+				);
+				return { accessToken, refreshToken: mapped.refreshToken };
+			}
+
+			/* @info - Suspended users' tokens are revoked; tell them apart
+			 * from a plain expired session so the client can show the notice. */
+			const userId = grabUserIdFromAuthId(refreshId);
+			if (userId) {
+				const marker = await this.cacheService.redis.get(`suspended:${userId}`);
+				if (marker) {
+					throwUnauthorizedError("This account is suspended. Contact support.");
+				}
+			}
+			throwBadRequestError("Refresh token expired.");
+		}
+
+		await this.cacheService.delete(refreshId);
+
+		let userData = await this.cacheService.get<IAuthData>(authId);
+
+		if (!userData) {
+			const userId = grabUserIdFromAuthId(authId);
+			const user = await this.userRepo.findById(Number(userId));
+			if (!user) throwUnauthorizedError("User not found.");
+
+			const { passwordHash: _, deleted_at: __, ...sanitized } = user as any;
+			userData = {
+				...generateAuthenticatedData(sanitized),
+				authId,
+				action: JwtAction.AUTHENTICATE,
+			} as IAuthData;
+
+			await this.cacheService.set(authId, userData, TTL.IN_30_MINUTES);
+		}
+
+		const tokens = await generateAuthTokens(authId, userType ?? "");
+
+		/* @info - Remember the successor so a racing stale refresh can heal
+		 * within the window (45s > any realistic rotation race) */
+		await this.cacheService.redis.set(
+			`rotated:${refreshId}`,
+			JSON.stringify({
+				refreshToken: tokens.refreshToken,
+				authId,
+			}),
+			"EX",
+			45,
+		);
+
+		/* @info - Carry the session metadata forward (no new GeoIP lookup) */
+		try {
+			const { refreshId: newRefreshId } = this.jwtService.verifyToken(
+				tokens.refreshToken,
+			);
+			if (newRefreshId) {
+				await SessionRegistryService.getInstance().copyOnRotate(
+					refreshId,
+					newRefreshId,
+				);
+			}
+		} catch {
+			/* best-effort */
+		}
+
+		return tokens;
+	};
+
+	logout = async (refreshToken: string) => {
+		const { refreshId, authId } = this.jwtService.verifyToken(refreshToken);
+		if (refreshId) {
+			await this.cacheService.deleteMany([refreshId, authId]);
+		}
+	};
+
+	logoutAll = async (refreshToken: string) => {
+		const { refreshId, authId } = this.jwtService.verifyToken(refreshToken);
+		if (!refreshId) return;
+
+		const userId = grabUserIdFromAuthId(authId);
+		const patterns = [`refresh:${userId}-*`, `auth:${userId}-*`];
+
+		for (const pattern of patterns) {
+			let cursor = "0";
+			do {
+				const [nextCursor, keys] = await this.cacheService.redis.scan(
+					cursor,
+					"MATCH",
+					pattern,
+					"COUNT",
+					100,
+				);
+				cursor = nextCursor;
+				if (keys.length > 0) {
+					await this.cacheService.redis.del(...keys);
+				}
+			} while (cursor !== "0");
+		}
+	};
+
+	/** @info - Real resend: fresh OTP + fresh Redis entries + a new email job.
+	 * The old OTP is invalidated by swapping the otpId the auth cache points at. */
+	resendOtp = async (data: IAuthData) => {
+		const otpId = generateOTPId();
+		const otp = generateOTP();
+
+		await Promise.all([
+			this.cacheService.set(data.authId, { ...data, otpId }, TTL.IN_30_MINUTES),
+			this.cacheService.set(
+				otpId,
+				{ otp: this.encryptionService.encrypt(otp) },
+				TTL.IN_30_MINUTES,
+			),
+		]);
+
+		this.emailQueueService.add(EmailJobNames.VERIFY_OTP as any, {
+			message: {
+				to: data.email!,
+				subject: "Verify your email",
+			},
+			template: "verify-otp" as any,
+			locals: {
+				otp,
+				name: data.firstName ?? "",
+				expiryMinutes: TTL.IN_30_MINUTES / 60,
+				timestamp: new Date().toISOString(),
+				ipAddress: "resend",
+				location: "Unknown Location",
+				device: "web",
+			},
+		});
+
+		return { token: this.jwtService.generateToken(data.authId) };
+	};
+
+	verifyEmail = async (data: IAuthData, otpCode: string) => {
+		const { authId, otpId, action, ...rest } = data;
+
+		if (!action) throwBadRequestError("Invalid request action.");
+
+		const cachedOtp = (await this.cacheService.get(otpId!)) as { otp: string };
+		if (!cachedOtp)
+			throwBadRequestError("Invalid or expired verification link.");
+
+		if (this.encryptionService.decrypt(cachedOtp.otp) !== otpCode) {
+			throwBadRequestError("Invalid code. Please try again.");
+		}
+
+		let user: any = null;
+		/* @info - Real roles for OTP/AUTHENTICATE logins (drives the dashboard redirect + JWT claim) */
+		let userRoles: Array<{ role: string }> = [];
+
+		if (action === JwtAction.VERIFY_EMAIL) {
+			const { firstName, lastName } = rest;
+			const email = String((rest as any).email || "").toLowerCase();
+			const role = (rest as any).role;
+			const decryptedPassword = this.encryptionService.decrypt(
+				(rest as any).password!,
+			);
+			const hashedPassword =
+				await this.encryptionService.hash(decryptedPassword);
+
+			/* Create user + assign their chosen role */
+			user = await this.userRepo.create({
+				firstName,
+				lastName,
+				email,
+				passwordHash: hashedPassword,
+				emailVerified: true,
+				emailVerifiedAt: new Date(),
+			} as any);
+
+			await this.userRoleRepo.create({
+				userId: user.id,
+				role,
+			} as any);
+		} else if (action === JwtAction.AUTHENTICATE) {
+			user = await this.userRepo.findOne(
+				eq(users.email, String((rest as any).email || "").toLowerCase()),
+			);
+			if (user) {
+				userRoles = await this.userRoleRepo.findMany(
+					eq(user_roles.userId, user.id),
+				);
+				user = await this.userRepo.update(user.id, {
+					lastLoginAt: new Date(),
+				});
+			}
+		} else if (action === JwtAction.FORGOT_PASSWORD) {
+			const { email } = rest as any;
+			const foundUser = await this.userRepo.findOne(
+				eq(users.email, String(email || "").toLowerCase()),
+			);
+			if (!foundUser) throwNotFoundError("User not found.");
+			user = foundUser;
+
+			const newAuthId = generateAuthId(user.id.toString());
+			const accessToken = this.jwtService.generateToken(newAuthId);
+
+			await this.cacheService.deleteMany([otpId!, authId]);
+			await this.cacheService.set(
+				newAuthId,
+				{
+					...generateAuthenticatedData(user),
+					authId: newAuthId,
+					action: JwtAction.FORGOT_PASSWORD,
+				},
+				TTL.IN_30_MINUTES,
+			);
+
+			return { accessToken };
+		} else {
+			throwBadRequestError("Invalid verification action.");
+		}
+
+		if (!user) throwBadRequestError("User not found.");
+
+		const userAny = user as any;
+		const { passwordHash: _, deleted_at: __, ...sanitized } = userAny;
+		const authenticatedUser = generateAuthenticatedData(sanitized);
+
+		if (action === JwtAction.VERIFY_EMAIL) {
+			this.emailQueueService.add(EmailJobNames.WELCOME as any, {
+				message: {
+					to: (authenticatedUser as any).email,
+					subject: "Welcome aboard! 🎉",
+				},
+				template: "welcome" as any,
+				locals: {
+					name: (authenticatedUser as any).firstName,
+					dashboardUrl: `${config.server.rootDomain}/dashboard`,
+				},
+			});
+		}
+
+		const newAuthId = generateAuthId(user.id.toString());
+
+		await this.cacheService.deleteMany([otpId!, authId]);
+		await this.cacheService.set(
+			newAuthId,
+			authenticatedUser,
+			TTL.IN_30_MINUTES,
+		);
+
+		const tokens = await generateAuthTokens(
+			newAuthId,
+			action === JwtAction.AUTHENTICATE
+				? (userRoles[0]?.role ?? "")
+				: ((rest as any).role ?? ""),
+		);
+
+		return {
+			user: await withPresignedUrl<any>(
+				{
+					...authenticatedUser,
+					...(action === JwtAction.AUTHENTICATE && {
+						roles: userRoles.map((r) => r.role),
+					}),
+				},
+				"avatarUrl",
+			),
+			...tokens,
+		};
+	};
+
+	forgotPassword = async (
+		email: string,
+		metadata: { ipAddress: string; location: string; userAgent: string },
+	) => {
+		/* @info - Normalize: stored emails are lowercase (migration 0020) */
+		email = email.toLowerCase();
+		const user = await this.userRepo.findOne(eq(users.email, email));
+		if (!user) throwNotFoundError("No account found with this email.");
+
+		const authId = generateAuthId(user!.id.toString());
+		const otpId = generateOTPId(user!.id.toString());
+		const otp = generateOTP();
+
+		const cacheData = {
+			authId,
+			otpId,
+			email: user!.email,
+			action: JwtAction.FORGOT_PASSWORD,
+		};
+
+		await Promise.all([
+			this.cacheService.set(authId, cacheData, TTL.IN_30_MINUTES),
+			this.cacheService.set(
+				otpId,
+				{ otp: this.encryptionService.encrypt(otp) },
+				TTL.IN_30_MINUTES,
+			),
+		]);
+
+		this.emailQueueService.add(EmailJobNames.RESET_PASSWORD as any, {
+			message: {
+				to: user!.email,
+				subject: "Reset your password",
+			},
+			template: "reset-password" as any,
+			locals: {
+				otp,
+				name: user!.firstName,
+				expiryMinutes: TTL.IN_30_MINUTES / 60,
+				timestamp: new Date().toISOString(),
+				ipAddress: metadata.ipAddress,
+				location: metadata.location,
+				device: metadata.userAgent,
+			},
+		});
+
+		const accessToken = this.jwtService.generateToken(authId);
+		return { accessToken };
+	};
+
+	/**
+	 * @info - Called after signup, when the caller lets the person choose a role.
+	 *         Creates the single user_roles row for the account.
+	 */
+	selectRole = async (authData: IAuthData, role: string) => {
+		const userId = Number(authData.id);
+
+		/* Check user exists */
+		const user = await this.userRepo.findById(userId);
+		if (!user) throwNotFoundError("User not found.");
+
+		/* Check role not already assigned — one role per user, locked */
+		const existing = await this.userRoleRepo.findMany(
+			eq(user_roles.userId, userId),
+		);
+		if (existing.length > 0) {
+			throwBadRequestError(
+				"A role is already assigned to this account. Each user is locked to one role.",
+			);
+		}
+
+		/* Create user_roles row */
+		await this.userRoleRepo.create({
+			userId,
+			role,
+		} as any);
+
+		/* Refresh the roles list */
+		const roles = await this.userRoleRepo.findMany(
+			eq(user_roles.userId, userId),
+		);
+
+		/* @info - Update the live session cache: the JWT stays valid (same
+		 * authId, now attached by the middleware) but the cached authData
+		 * must carry the new role, or role-gated code keeps treating the
+		 * user as roleless until the session expires. */
+		const fresh = (await this.userRepo.findById(userId)) as any;
+		if (fresh && authData.authId) {
+			const {
+				passwordHash: _,
+				deleted_at: __,
+				hash: ___,
+				...sanitized
+			} = fresh;
+			await this.cacheService.set(
+				authData.authId,
+				{
+					...sanitized,
+					roles: roles.map((r) => r.role),
+					isAuthenticated: true,
+				},
+				TTL.IN_30_MINUTES,
+			);
+		}
+
+		return {
+			roles: roles.map((r) => r.role),
+		};
+	};
+
+	private invalidateAllTokens = async (userId: string) => {
+		const patterns = [`refresh:${userId}-*`, `auth:${userId}-*`];
+
+		for (const pattern of patterns) {
+			let cursor = "0";
+			do {
+				const [nextCursor, keys] = await this.cacheService.redis.scan(
+					cursor,
+					"MATCH",
+					pattern,
+					"COUNT",
+					100,
+				);
+				cursor = nextCursor;
+				if (keys.length > 0) {
+					await this.cacheService.redis.del(...keys);
+				}
+			} while (cursor !== "0");
+		}
+	};
+
+	resetPassword = async (authData: IAuthData, newPassword: string) => {
+		const user = await this.userRepo.findById(Number(authData.id));
+		if (!user) throwNotFoundError("User not found.");
+
+		const hashedPassword = await this.encryptionService.hash(newPassword);
+		await this.userRepo.update(user!.id, {
+			passwordHash: hashedPassword,
+			passwordChangedAt: new Date(),
+		} as any);
+
+		this.invalidateAllTokens(user!.id.toString());
+	};
+
+	me = async (authData: IAuthData) => {
+		const user = await this.userRepo.findById(Number(authData.id));
+		if (!user) throwNotFoundError("User not found.");
+
+		const roles = await this.userRoleRepo.findMany(
+			eq(user_roles.userId, user!.id),
+		);
+
+		const { passwordHash: _, deleted_at: __, ...sanitized } = user! as any;
+
+		return withPresignedUrl<any>(
+			{
+				...sanitized,
+				roles: roles.map((r) => r.role),
+			},
+			"avatarUrl",
+		);
+	};
+}

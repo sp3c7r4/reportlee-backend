@@ -1,0 +1,56 @@
+# dependencies
+node_modules
+
+# build output
+dist
+*.tgz
+
+# coverage
+coverage
+*.lcov
+
+# logs
+logs
+*.log
+
+# environment files — only the two templates are committed
+.env.*
+!.env.example
+!.env.test
+.env.*.local
+
+# caches
+.cache
+*.tsbuildinfo
+
+# IDE
+.idea
+.vscode
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keys
+*.key
+*.pem
+
+# Database
+# src/db/migrations/
+
+# Git
+*.diff
+
+# Scratch / artifacts
+*.zip
+.pi-subagents/
+
+# any env file, anywhere
+.env
+local_cache/
+
+# local CodeGraph index (not part of the app)
+.codegraph/
+
+

@@ -1,0 +1,109 @@
+import axios from "axios";
+import _ from "lodash";
+import { TTL } from "@/constants";
+import type { IAuthenticatedUser, IBaseUser } from "@/interfaces";
+import { CacheService } from "@/services/cache.service";
+import { JwtService } from "@/services/jwt.service";
+import { generateRefreshTokenId, grabUserIdFromAuthId } from "../id-generators";
+
+export const isPrivateIP = (ip: string): boolean => {
+	return (
+		ip === "127.0.0.1" ||
+		ip === "::1" ||
+		ip.startsWith("192.168.") ||
+		ip.startsWith("10.") ||
+		ip.startsWith("172.16.") ||
+		ip.startsWith("172.17.") ||
+		ip.startsWith("172.18.") ||
+		ip.startsWith("172.19.") ||
+		ip.startsWith("172.20.") ||
+		ip.startsWith("172.21.") ||
+		ip.startsWith("172.22.") ||
+		ip.startsWith("172.23.") ||
+		ip.startsWith("172.24.") ||
+		ip.startsWith("172.25.") ||
+		ip.startsWith("172.26.") ||
+		ip.startsWith("172.27.") ||
+		ip.startsWith("172.28.") ||
+		ip.startsWith("172.29.") ||
+		ip.startsWith("172.30.") ||
+		ip.startsWith("172.31.")
+	);
+};
+
+/* @info - In-process cache: geo lookups are rare per IP, and hitting an
+ * external API on every request would be wasteful (and slow on the hot
+ * path - see metadata-grabber's deferred design). */
+const locationCache = new Map<string, { loc: string; at: number }>();
+const LOCATION_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+export const getLocationFromIP = async (ip: string): Promise<string> => {
+	if (!ip || isPrivateIP(ip)) return "Local Network";
+
+	const hit = locationCache.get(ip);
+	if (hit && Date.now() - hit.at < LOCATION_CACHE_TTL) return hit.loc;
+
+	try {
+		const { data } = await axios.get(`https://ipapi.co/${ip}/json/`, {
+			timeout: 5000,
+		});
+
+		if (data.error) throw new Error(data.error);
+
+		const city = data.city?.trim() || "";
+		const country = data.country_name?.trim() || "";
+		const location = [city, country].filter(Boolean).join(", ");
+
+		const resolved = location || "Unknown Location";
+		locationCache.set(ip, { loc: resolved, at: Date.now() });
+		return resolved;
+	} catch (error: unknown) {
+		console.error(
+			`Failed to get location for IP ${ip}:`,
+			error instanceof Error ? error.message : String(error),
+		);
+		return "Unknown Location";
+	}
+};
+
+/**
+ * @info - The fields a user row may never leave the server. Every response that
+ * carries a user passes through here, so a new column cannot leak by being spread.
+ */
+const PRIVATE_USER_FIELDS = ["passwordHash", "hash", "deleted_at", "deletedAt"];
+
+export const sanitizeUser = <T extends Record<string, any>>(row: T): T =>
+	_.omit(row, PRIVATE_USER_FIELDS) as T;
+
+export const generateAuthenticatedData = (
+	modelData: Record<string, any> | IBaseUser,
+): IAuthenticatedUser => {
+	const data = {
+		...sanitizeUser(modelData),
+		isAuthenticated: true,
+		authenticatedAt: new Date(),
+	};
+	return data as IAuthenticatedUser;
+};
+
+export const generateAuthTokens = async (authId: string, userType: string) => {
+	const cacheService = CacheService.getInstance();
+	const jwtService = JwtService.getInstance();
+
+	const userId = grabUserIdFromAuthId(authId);
+
+	/** @info - Generate & store Refresh Token key */
+	const refreshId = generateRefreshTokenId(userId);
+	const refreshToken = jwtService.generateTokenFromPayload(
+		{
+			authId,
+			refreshId,
+			userType,
+		},
+		TTL.IN_7_DAYS,
+	);
+	await cacheService.set(refreshId, authId, TTL.IN_7_DAYS);
+
+	const accessToken = jwtService.generateToken(authId);
+	return { accessToken, refreshToken };
+};

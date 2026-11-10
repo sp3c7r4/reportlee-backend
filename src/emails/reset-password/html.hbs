@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset your password</title>
+  <style>
+    @media screen {
+      @font-face {
+        font-family: 'Rency';
+        src: url('https://cdn.cowrywise.com/fonts/rency/rency.woff2') format('woff2');
+        font-weight: normal;
+        font-display: fallback;
+      }
+      @font-face {
+        font-family: 'Rency';
+        src: url('https://cdn.cowrywise.com/fonts/rency/rency.woff2') format('woff2');
+        font-weight: 600;
+        font-display: fallback;
+      }
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f5f3f0;
+      font-family: 'Rency', 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      border: 1px solid #e8e3db;
+    }
+    .header {
+      padding: 28px 36px 16px;
+      border-bottom: 1px solid #f0ece4;
+    }
+    .logo-svg {
+      display: inline-block;
+      vertical-align: middle;
+      width: 48px;
+      height: 48px;
+    }
+    .content {
+      padding: 32px 36px 28px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #a09888;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin: 0 0 4px;
+    }
+    .greeting {
+      font-size: 20px;
+      font-weight: 400;
+      color: #3D3522;
+      margin: 0 0 24px;
+      line-height: 1.4;
+    }
+    .otp-box {
+      border: 1px solid #e8e3db;
+      border-radius: 8px;
+      padding: 16px 24px;
+      background: #faf9f7;
+      display: inline-block;
+    }
+    .otp-code {
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: 8px;
+      color: #3D3522;
+      font-family: 'SF Mono', Consolas, monospace;
+    }
+    .expiry {
+      margin: 16px 0 0;
+      font-size: 13px;
+      color: #8c8478;
+    }
+    .expiry span {
+      color: #3D3522;
+      font-weight: 600;
+    }
+    .message {
+      border-top: 1px solid #f0ece4;
+      padding: 24px 0 0;
+      margin-top: 24px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: #6b6255;
+    }
+    .footer {
+      background: #faf9f7;
+      border-top: 1px solid #e8e3db;
+      border-radius: 0 0 12px 12px;
+      padding: 20px 36px 24px;
+      font-size: 12px;
+      color: #a09888;
+      line-height: 1.6;
+    }
+    .footer .meta {
+      margin: 0 0 8px;
+    }
+    .footer .timestamp {
+      font-size: 11px;
+      color: #c4bab0;
+      margin: 0;
+    }
+    @media (max-width: 480px) {
+      .header, .content, .footer { padding-left: 20px; padding-right: 20px; }
+      .otp-box { padding: 12px 18px; }
+      .otp-code { font-size: 26px; letter-spacing: 6px; }
+    }
+  </style>
+</head>
+<body style="margin:0; padding:0; background-color:#f5f3f0; font-family:'Rency','Google Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f3f0; padding:40px 16px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" class="email-container" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border-radius:12px; border:1px solid #e8e3db;">
+        <!-- HEADER: only the SVG logo -->
+        <tr>
+          <td class="header" style="padding:28px 36px 16px; border-bottom:1px solid #f0ece4;">
+            <img class="logo-svg" src="{{logoUrl}}" width="48" height="48" alt="Logo" style="display:inline-block; vertical-align:middle; border:0;">
+          </td>
+        </tr>
+        <!-- CONTENT (left‑aligned) -->
+        <tr>
+          <td class="content" style="padding:32px 36px 28px;">
+            <p class="badge" style="font-size:11px; font-weight:600; color:#a09888; letter-spacing:1.5px; text-transform:uppercase; margin:0 0 4px;">Password reset</p>
+            <p class="greeting" style="font-size:20px; font-weight:400; color:#3D3522; margin:0 0 24px; line-height:1.4;">Hello {{name}}</p>
+
+            <div class="otp-box" style="border:1px solid #e8e3db; border-radius:8px; padding:16px 24px; background:#faf9f7; display:inline-block;">
+              <span class="otp-code" style="font-size:32px; font-weight:600; letter-spacing:8px; color:#3D3522; font-family:'SF Mono',Consolas,monospace;">{{otp}}</span>
+            </div>
+
+            <p class="expiry" style="margin:16px 0 0; font-size:13px; color:#8c8478;">
+              Code expires in <span style="color:#3D3522; font-weight:600;">{{expiryMinutes}} minutes</span>
+            </p>
+
+            <div class="message" style="border-top:1px solid #f0ece4; padding:24px 0 0; margin-top:24px; font-size:14px; line-height:1.7; color:#6b6255;">
+              We received a request to reset your password. Enter the code above to continue. If you did not request this, you can safely ignore this email – your password will remain unchanged.
+            </div>
+          </td>
+        </tr>
+        <!-- FOOTER -->
+        <tr>
+          <td class="footer" style="background:#faf9f7; border-top:1px solid #e8e3db; border-radius:0 0 12px 12px; padding:20px 36px 24px; font-size:12px; color:#a09888; line-height:1.6;">
+            <p class="meta" style="margin:0 0 8px;">
+              Request from {{ipAddress}} · {{location}} · {{device}}
+            </p>
+            <p class="timestamp" style="font-size:11px; color:#c4bab0; margin:0;">{{timestamp}}</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
