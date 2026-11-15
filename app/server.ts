@@ -9,7 +9,12 @@ import { WebSocketServer } from "ws";
 import { config } from "@/config";
 import { connectPostgresDB, connectRedisDB } from "@/db";
 import { healthCheck } from "@/helpers";
-import { errorHandler, RequestLogger, routeNotFound } from "@/middlewares";
+import {
+	errorHandler,
+	queueDashboardGuard,
+	RequestLogger,
+	routeNotFound,
+} from "@/middlewares";
 import { router } from "@/routes";
 import { EmailQueueService } from "@/services";
 import { waitForSocket } from "@/services/websocket.handler";
@@ -42,7 +47,7 @@ const getMessage = (port: number) => `
 ================================================
 Server Application Started!
 API V1: http://${config.server.hostname}:${port}
-QUEUE Dashboard: http://${config.server.hostname}:${port}/queue
+QUEUE Dashboard: ${config.queueDashboard.password || config.env === "development" ? `http://${config.server.hostname}:${port}/queue` : "disabled"}
 ================================================
 `;
 
@@ -52,16 +57,31 @@ app.get("/", healthCheck);
 
 app.route("/api/v1", router);
 
-/** @info - BullMQ dashboard: every queue this app owns, one adapter each. */
-const bullMQAdapter = new HonoAdapter(serveStatic);
-bullMQAdapter.setBasePath("/queue");
-
-createBullBoard({
-	queues: [new BullMQAdapter(EmailQueueService.getInstance().getQueue())],
-	serverAdapter: bullMQAdapter,
+/** @info - BullMQ dashboard: every queue this app owns, one adapter each. Mounted only
+ * behind the guard; without credentials it is development-only (see queueDashboardGuard). */
+const queueGuard = queueDashboardGuard({
+	nodeEnv: config.env,
+	user: config.queueDashboard.user,
+	password: config.queueDashboard.password,
 });
 
-app.route("/queue", bullMQAdapter.registerPlugin());
+if (queueGuard) {
+	const bullMQAdapter = new HonoAdapter(serveStatic);
+	bullMQAdapter.setBasePath("/queue");
+
+	createBullBoard({
+		queues: [new BullMQAdapter(EmailQueueService.getInstance().getQueue())],
+		serverAdapter: bullMQAdapter,
+	});
+
+	app.use("/queue", queueGuard);
+	app.use("/queue/*", queueGuard);
+	app.route("/queue", bullMQAdapter.registerPlugin());
+} else {
+	logger.warn(
+		"Queue dashboard disabled: set QUEUE_DASHBOARD_PASSWORD to enable it.",
+	);
+}
 
 let server: ReturnType<typeof serve>;
 

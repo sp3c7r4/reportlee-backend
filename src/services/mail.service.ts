@@ -160,9 +160,13 @@ export class EmailService {
 			await this.transporter.sendMail(params);
 			this.log.info(`Email sent to ${options.message.to}`);
 		} catch (e) {
+			/* @info - Logs the transport error and template name only, never the body, locals
+			 * (OTP) or recipient. Rethrown so BullMQ marks the job failed and retries it;
+			 * swallowing it here made every failed send look complete and lost the email. */
 			this.log.error(
-				`Failed to send email to ${options.message.to}: ${e instanceof Error ? e.message : "Unknown error"}`,
+				`Failed to send ${options.template} email: ${e instanceof Error ? e.message : "Unknown error"}`,
 			);
+			throw e;
 		}
 	};
 }

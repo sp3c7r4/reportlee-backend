@@ -70,6 +70,14 @@ export const EnvSchema = z
 		SMTP_USER: z.string().optional(),
 		SMTP_PASS: z.string().optional(),
 
+		/* @info - Basic auth for the /queue dashboard. Without a password the dashboard is
+		 * mounted only when NODE_ENV=development; every other environment gets no route. */
+		QUEUE_DASHBOARD_USER: z.string().min(1).default("admin"),
+		QUEUE_DASHBOARD_PASSWORD: z.preprocess(
+			(v) => (v === "" ? undefined : v),
+			z.string().min(12).optional(),
+		),
+
 		AWS_REGION: z.string().default("eu-west-1"),
 		AWS_ACCESS_KEY_ID: z.string(),
 		AWS_SECRET_ACCESS_KEY: z.string(),

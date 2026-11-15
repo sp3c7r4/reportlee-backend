@@ -83,7 +83,6 @@ export class AuthController {
 
 	verifyEmail = async (c: Context) => {
 		const data = c.get("authData");
-		console.log(data);
 		const { otp } = await c.req.json();
 		const result = await this.authService.verifyEmail(data, otp);
 		return sendSuccessResponse(c, {

@@ -91,7 +91,8 @@ never run by tooling.
 
 `npm run build`, then run `dist/server.js` (API) and `dist/init.workers.js` (queues) under
 pm2 (`ecosystem.config.cjs`). Migrations run from the same bundle with
-`node dist/migrate.js`. Queues have a BullMQ dashboard at `/queue`.
+`node dist/migrate.js`. Queues have a BullMQ dashboard at `/queue`, behind basic auth
+(`QUEUE_DASHBOARD_PASSWORD`); without a password it exists only when `NODE_ENV=development`.
 
 ## Deploy to Railway
 
@@ -102,7 +103,8 @@ One Railway project from this repo, two services plus the Railway Postgres and R
 | API | `npm ci && npm run build` | `node dist/server.js` |
 | Worker (no public domain) | `npm ci && npm run build` | `node dist/init.workers.js` |
 
-- The worker must be running, or no OTP or verification email is sent.
+- The worker must be running, or no OTP or verification email is sent. A failed send is retried 5 times with exponential backoff (5s, 10s, 20s, 40s); after that the job stays in the failed list for 24 hours.
+- The `/queue` dashboard is disabled on Railway unless you set `QUEUE_DASHBOARD_PASSWORD` (at least 12 characters) on the API service. Then it asks for basic auth with `QUEUE_DASHBOARD_USER` (default `admin`) and that password. Leave it unset to keep the dashboard off.
 - Give both services `POSTGRES_URI` and `REDIS_URI` as reference variables to the plugin URLs (for example `${{Postgres.DATABASE_URL}}` and `${{Redis.REDIS_URL}}`; plugin names may differ).
 - Migrations: run `node dist/migrate.js` once per deploy, as the API pre-deploy command or with `railway run node dist/migrate.js`. The build copies the SQL files to `dist/migrations`.
 - Regenerate the JWT key pair and `ENCRYPTION_KEY` for production (commands are in `.env.example`). The ones in the example file are throwaway.
@@ -117,6 +119,7 @@ Environment variable names:
 - Data: `POSTGRES_URI`, `REDIS_URI`, `REDIS_CHANNEL_PREFIX` (optional)
 - Auth: `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_EXPIRES_IN`, `JWT_ISSUER`, `ENCRYPTION_KEY`
 - Mail: `MAIL_PROVIDER`, `MAIL_DOMAIN`, `MAIL_FROM_NAME`, `MAIL_LOGO_URL`
+- Queue dashboard (optional): `QUEUE_DASHBOARD_USER`, `QUEUE_DASHBOARD_PASSWORD`
 - SMTP provider: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`
 - Resend provider: `RESEND_API_KEY`, `RESEND_DOMAIN`
 - Storage: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `CDN_URL`

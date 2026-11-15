@@ -3,6 +3,15 @@ import chalk from "chalk";
 import { createLogger, format, transports } from "winston";
 import { config } from "@/config";
 import { LoggerLevels } from "@/enums";
+import { redactLog } from "@/helpers/log-redact.helper";
+
+/* @info - Masks sensitive keys (password, otp, tokens, authorization) in the metadata
+ * of every log call before any transport prints it. level, message and the symbol
+ * keys winston relies on are left alone. */
+export const redactMeta = format((info) => {
+	const { level, message, timestamp, service, ...meta } = info;
+	return Object.assign(info, redactLog(meta));
+});
 
 const colorize = format.printf(
 	({ level, message, timestamp, service, ...meta }) => {
@@ -35,7 +44,7 @@ const errorLogFileName = `${env.trim()}.error.log`;
 
 export const logger = createLogger({
 	level: LoggerLevels.DEBUG,
-	format: format.combine(format.timestamp(), format.simple()),
+	format: format.combine(format.timestamp(), redactMeta(), format.simple()),
 	transports: [
 		new transports.Console({
 			format: format.combine(format.timestamp(), colorize),

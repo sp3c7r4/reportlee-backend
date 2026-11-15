@@ -24,7 +24,12 @@ export class EmailQueueService extends BaseQueueService<EmailJobData<any>> {
 			queueName: QueueNames.EMAIL,
 			alias: "EmailQueue",
 			// no priority - prioritized jobs were never drained to wait in prod
-			args: {},
+			/* @info - A failed send is retried 5 times, waiting 5s, 10s, 20s, 40s: long enough
+			 * to ride out an SMTP blip, short enough that an OTP (10 min) is still valid. */
+			args: {
+				attempts: 5,
+				backoff: { type: "exponential", delay: 5000 },
+			},
 		});
 	}
 

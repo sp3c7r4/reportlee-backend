@@ -2,13 +2,15 @@ import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { WSContext } from "hono/ws";
 import { StatusCodes } from "http-status-codes";
+import { redactLog } from "@/helpers/log-redact.helper";
 
 export const sendSuccessResponse = (
 	c: Context,
 	data: unknown | unknown[],
 	statusCode: ContentfulStatusCode = StatusCodes.OK,
 ) => {
-	console.log("Response: ", data);
+	/* @info - redacted: success bodies carry accessToken, refreshToken and signup tokens. */
+	console.log("Response: ", redactLog(data));
 	return c.json(
 		{
 			timestamp: new Date().toISOString(),

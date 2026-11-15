@@ -57,6 +57,10 @@ export const config = {
 		rootDomain: env.ROOT_DOMAIN,
 		origins: env.ORIGINS,
 	},
+	queueDashboard: {
+		user: env.QUEUE_DASHBOARD_USER,
+		password: env.QUEUE_DASHBOARD_PASSWORD,
+	},
 
 	frontendUrl: env.FRONTEND_URL,
 

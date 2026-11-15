@@ -104,12 +104,14 @@ describe("smtp mail provider", () => {
 		expect(logged()).not.toContain("123456");
 	});
 
-	it("catches and logs a rejected send without throwing", async () => {
+	it("logs a rejected send without body or OTP, then rethrows so BullMQ retries", async () => {
 		mocks.sendMail.mockRejectedValueOnce(new Error("auth failed"));
-		await expect(send()).resolves.toBeUndefined();
+		await expect(send()).rejects.toThrow("auth failed");
 		expect(mocks.error).toHaveBeenCalledTimes(1);
 		expect(logged()).toContain("auth failed");
 		expect(logged()).not.toContain(SENTINEL);
+		expect(logged()).not.toContain("123456");
+		expect(logged()).not.toContain("user@example.com");
 	});
 
 	it("keeps resend and ses off the Gmail options", () => {
