@@ -6,11 +6,18 @@ export const createUserSchema = z.object({
 	lastName: z.string().min(1),
 	email: z.string().email(),
 	password: z.string().min(8),
-	role: z.enum(Object.values(UserRole) as [string, ...string[]]),
+	/* @info - Accepted but ignored: old frontend builds still send a role. Every signup is a member. */
+	role: z.enum(Object.values(UserRole) as [string, ...string[]]).optional(),
 });
 
 export const selectRoleSchema = z.object({
-	role: z.enum(Object.values(UserRole) as [string, ...string[]]),
+	/* @info - Admin is never self-assigned; an existing admin grants it. */
+	role: z.enum(
+		Object.values(UserRole).filter((r) => r !== UserRole.ADMIN) as [
+			string,
+			...string[],
+		],
+	),
 });
 
 export const loginUserSchema = z

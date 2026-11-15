@@ -5,7 +5,7 @@ export interface SignupData {
 	lastName: string;
 	email: string;
 	password: string;
-	role: UserRole;
+	role?: UserRole;
 }
 
 export interface LoginData {

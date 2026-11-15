@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { config } from "@/config";
 import { TTL } from "@/constants";
-import { EmailJobNames } from "@/enums";
+import { EmailJobNames, UserRole } from "@/enums";
 import { AuthLoginTypes, JwtAction } from "@/enums/auth/auth.enums";
 import {
 	generateAuthenticatedData,
@@ -11,11 +11,13 @@ import {
 	generateOTPId,
 	grabUserIdFromAuthId,
 	throwBadRequestError,
+	throwForbiddenError,
 	throwNotFoundError,
 	throwUnauthorizedError,
 	withPresignedUrl,
 } from "@/helpers";
 import type { IAuthData } from "@/interfaces";
+import { AUTH_MESSAGES } from "@/modules/auth/auth.message";
 import { SessionRegistryService } from "@/modules/user/session-registry.service";
 import { users } from "@/modules/user/user.model";
 import { UserRepository } from "@/modules/user/user.repository";
@@ -74,7 +76,6 @@ export class AuthService {
 			lastName: data.lastName,
 			email,
 			action: JwtAction.VERIFY_EMAIL,
-			role: data.role,
 			password: this.encryptionService.encrypt(data.password),
 		};
 
@@ -408,14 +409,14 @@ export class AuthService {
 		if (action === JwtAction.VERIFY_EMAIL) {
 			const { firstName, lastName } = rest;
 			const email = String((rest as any).email || "").toLowerCase();
-			const role = (rest as any).role;
 			const decryptedPassword = this.encryptionService.decrypt(
 				(rest as any).password!,
 			);
 			const hashedPassword =
 				await this.encryptionService.hash(decryptedPassword);
 
-			/* Create user + assign their chosen role */
+			/* @info - Always a member. A role cached by a signup started before this
+			 * rule (30 min TTL) is ignored on purpose; an admin grants admin later. */
 			user = await this.userRepo.create({
 				firstName,
 				lastName,
@@ -427,8 +428,9 @@ export class AuthService {
 
 			await this.userRoleRepo.create({
 				userId: user.id,
-				role,
+				role: UserRole.MEMBER,
 			} as any);
+			userRoles = [{ role: UserRole.MEMBER }];
 		} else if (action === JwtAction.AUTHENTICATE) {
 			user = await this.userRepo.findOne(
 				eq(users.email, String((rest as any).email || "").toLowerCase()),
@@ -493,22 +495,25 @@ export class AuthService {
 		await this.cacheService.deleteMany([otpId!, authId]);
 		await this.cacheService.set(
 			newAuthId,
-			authenticatedUser,
+			action === JwtAction.VERIFY_EMAIL
+				? { ...authenticatedUser, roles: [UserRole.MEMBER] }
+				: authenticatedUser,
 			TTL.IN_30_MINUTES,
 		);
 
 		const tokens = await generateAuthTokens(
 			newAuthId,
-			action === JwtAction.AUTHENTICATE
-				? (userRoles[0]?.role ?? "")
-				: ((rest as any).role ?? ""),
+			action === JwtAction.VERIFY_EMAIL
+				? UserRole.MEMBER
+				: (userRoles[0]?.role ?? ""),
 		);
 
 		return {
 			user: await withPresignedUrl<any>(
 				{
 					...authenticatedUser,
-					...(action === JwtAction.AUTHENTICATE && {
+					...((action === JwtAction.AUTHENTICATE ||
+						action === JwtAction.VERIFY_EMAIL) && {
 						roles: userRoles.map((r) => r.role),
 					}),
 				},
@@ -573,6 +578,11 @@ export class AuthService {
 	 *         Creates the single user_roles row for the account.
 	 */
 	selectRole = async (authData: IAuthData, role: string) => {
+		/* @info - Choke point: only an existing admin may grant admin (PATCH /user/:id/role). */
+		if (role === UserRole.ADMIN) {
+			throwForbiddenError(AUTH_MESSAGES.ADMIN_NOT_SELF_ASSIGNABLE);
+		}
+
 		const userId = Number(authData.id);
 
 		/* Check user exists */
