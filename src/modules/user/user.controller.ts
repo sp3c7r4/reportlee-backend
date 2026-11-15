@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { formDataToObject, sendSuccessResponse } from "@/helpers";
 import { SessionRegistryService } from "./session-registry.service";
+import { USER_MESSAGES } from "./user.message";
 import { UserService } from "./user.service";
 
 export class UserController {
@@ -30,6 +31,18 @@ export class UserController {
 		return sendSuccessResponse(c, {
 			message: "Onboarding completed successfully!",
 			data: result,
+		});
+	};
+
+	changeRole = async (c: Context) => {
+		const id = Number(c.req.param("id"));
+		const { role } = await c.req.json();
+		const user = await this.userService.changeRole(id, role);
+		return sendSuccessResponse(c, {
+			message: user.changed
+				? USER_MESSAGES.ROLE_UPDATED
+				: USER_MESSAGES.ROLE_UNCHANGED,
+			user,
 		});
 	};
 

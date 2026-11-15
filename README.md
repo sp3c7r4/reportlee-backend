@@ -51,7 +51,7 @@ repository never decides business rules.
 | Module | Routes | Notes |
 |---|---|---|
 | auth | `/api/v1/auth/*` | signup → OTP by email, login, OTP login, refresh (with rotation grace), logout, forgot/reset password, `/me` |
-| user | `/api/v1/user/*` | profile, avatar, onboarding, password change, sessions, account delete |
+| user | `/api/v1/user/*` | profile, avatar, onboarding, password change, sessions, account delete, role grant (`PATCH /user/:id/role`, admin only) |
 | notifications | `/api/v1/notifications/*` | list, unread count, mark read; pushed over the socket |
 | upload | `/api/v1/upload/*` | presigned PUT/GET against S3, plus a server-side upload |
 
@@ -59,6 +59,12 @@ Auth is three pieces: an `authId` in a short-lived JWT, the session in Redis und
 and a rotating refresh token whose id is registered in Redis. Changing a password or a role
 writes the new value into the cached session, so a token minted before the change cannot keep
 the old grant.
+
+### First admin
+Every signup is a member; only an existing admin can grant admin. `npm run seed:dev` creates
+`dev-admin` locally. For staging and production, the owner inserts the `admin` row for a chosen
+user in one transaction, after deleting that user's `member` row. This is a manual step and is
+never run by tooling.
 
 ## Adding a module
 

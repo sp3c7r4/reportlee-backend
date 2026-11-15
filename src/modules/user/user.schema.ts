@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UserRole } from "@/enums";
 
 /**
  * @info - Onboarding arrives as multipart form data (the avatar rides along), so
@@ -51,6 +52,14 @@ export const updateUserSchema = z.object({
 				.optional(),
 		})
 		.optional(),
+});
+
+export const userIdParamSchema = z.object({
+	id: z.coerce.number().int().positive(),
+});
+
+export const changeRoleSchema = z.object({
+	role: z.enum(Object.values(UserRole) as [string, ...string[]]),
 });
 
 export const changePasswordSchema = z.object({

@@ -218,6 +218,39 @@ export class SessionRegistryService {
 		return rows.sort((a, b) => b.lastActiveAt - a.lastActiveAt);
 	};
 
+	/** @info - After a role change, rewrite `roles` in the user's cached auth sessions.
+	 * XX so an expired key is not resurrected, KEEPTTL so the 30 min window is not
+	 * extended. The `-` in the pattern stops id 5 from matching auth:50-*. */
+	setRolesForUser = async (userId: number, roles: string[]): Promise<void> => {
+		const keys: string[] = [];
+		let cursor = "0";
+		do {
+			const [next, batch] = await this.cache.redis.scan(
+				cursor,
+				"MATCH",
+				`auth:${userId}-*`,
+				"COUNT",
+				100,
+			);
+			cursor = next;
+			keys.push(...batch);
+		} while (cursor !== "0");
+
+		for (const key of keys) {
+			const raw = await this.cache.redis.get(key);
+			if (!raw) continue;
+			const session = JSON.parse(raw) as Record<string, unknown>;
+			/* @info - ioredis types have no SET overload combining XX and KEEPTTL, so use call(). */
+			await this.cache.redis.call(
+				"SET",
+				key,
+				JSON.stringify({ ...session, roles }),
+				"XX",
+				"KEEPTTL",
+			);
+		}
+	};
+
 	/** @info - Revoke one session: refresh + auth cache + metadata */
 	revoke = async (userId: number, refreshId: string): Promise<boolean> => {
 		if (!refreshId.startsWith(`refresh:${userId}-`)) return false;

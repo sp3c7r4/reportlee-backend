@@ -11,6 +11,9 @@ import { UserRepository } from "@/modules/user/user.repository";
 import { UserRoleRepository } from "@/modules/user/user-role.repository";
 import { CacheService } from "@/services/cache.service";
 import { EncryptionService } from "@/services/encryption.service";
+import { logger } from "@/utils";
+import { SessionRegistryService } from "./session-registry.service";
+import { USER_MESSAGES } from "./user.message";
 
 export class UserService {
 	private static instance: UserService;
@@ -26,6 +29,48 @@ export class UserService {
 	}
 
 	private constructor() {}
+
+	/** @info - Admin-only (route guard). One role per user; see replaceRoleGuarded. */
+	changeRole = async (targetId: number, role: string) => {
+		const target = await this.userRepo.findById(targetId);
+		if (!target) throwNotFoundError(USER_MESSAGES.USER_NOT_FOUND);
+
+		const current = (
+			await this.userRoleRepo.findMany(eq(user_roles.userId, targetId))
+		).map((r) => r.role as string);
+
+		if (current.length === 1 && current[0] === role) {
+			return {
+				id: targetId,
+				roles: [role],
+				previousRoles: current,
+				changed: false,
+			};
+		}
+
+		const result = await this.userRoleRepo.replaceRoleGuarded(targetId, role);
+		if (!result.ok) return throwBadRequestError(USER_MESSAGES.LAST_ADMIN);
+
+		/* @info - Guards read user_roles on every call, so enforcement is already
+		 * correct. The cached session only carries display data: never fail the
+		 * request because Redis is unavailable. */
+		try {
+			await SessionRegistryService.getInstance().setRolesForUser(targetId, [
+				role,
+			]);
+		} catch (error) {
+			logger.error(
+				`Role cache refresh failed for user ${targetId}: ${(error as Error).message}`,
+			);
+		}
+
+		return {
+			id: targetId,
+			roles: [role],
+			previousRoles: result.previous,
+			changed: true,
+		};
+	};
 
 	profile = async (authData: IAuthData) => {
 		const user = await this.userRepo.findById(Number(authData.id));

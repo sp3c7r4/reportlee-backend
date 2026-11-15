@@ -1,13 +1,16 @@
 import { Hono } from "hono";
 import { FILE_SIZES } from "@/constants/file-size";
 import { ImageMimeType } from "@/enums";
+import { requireAdmin } from "@/middlewares/auth/guards";
 import { FileUploadMiddleware } from "@/middlewares/upload";
 import { JwtService, ZodEngine } from "@/services";
 import { UserController } from "./user.controller";
 import {
 	changePasswordSchema,
+	changeRoleSchema,
 	onboardUserSchema,
 	updateUserSchema,
+	userIdParamSchema,
 } from "./user.schema";
 
 export const userRouter = new Hono({ strict: true });
@@ -59,3 +62,12 @@ userRouter.post(
 );
 
 userRouter.delete("/account", userController.deleteAccount);
+
+/* @info - Admin guard runs before validation so a non-admin never learns the body shape. */
+userRouter.patch(
+	"/:id/role",
+	requireAdmin,
+	zodEngine.validate.params(userIdParamSchema),
+	zodEngine.validate.body(changeRoleSchema),
+	userController.changeRole,
+);
