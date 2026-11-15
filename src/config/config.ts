@@ -19,6 +19,14 @@ export const config = {
 		channelPrefix: env.REDIS_CHANNEL_PREFIX,
 	},
 
+	smtp: {
+		host: env.SMTP_HOST ?? "",
+		port: env.SMTP_PORT ?? 465,
+		secure: env.SMTP_SECURE ?? true,
+		user: env.SMTP_USER ?? "",
+		pass: env.SMTP_PASS ?? "",
+	},
+
 	mail: {
 		domain: env.MAIL_DOMAIN,
 		fromName: env.MAIL_FROM_NAME,

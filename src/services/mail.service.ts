@@ -10,7 +10,7 @@ import { logger } from "@/utils";
 
 Handlebars.registerHelper("gt", (a, b) => a > b);
 
-export type MailProvider = "ses" | "resend";
+export type MailProvider = "ses" | "resend" | "smtp";
 
 /* @info - Exported so the test can pin them: the region must be the one the identity is
  * verified in, and the from-domain must belong to the provider doing the sending (Resend
@@ -23,18 +23,33 @@ export const sesClientOptions = () => ({
 	},
 });
 
-export const mailFromDomain = (provider: MailProvider): string =>
-	provider === "ses" ? config.mail.domain : config.aws.resend.domain;
+export const mailFromDomain = (provider: MailProvider): string => {
+	if (provider === "smtp") {
+		return config.smtp.user.split("@")[1] || config.mail.domain;
+	}
+	return provider === "ses" ? config.mail.domain : config.aws.resend.domain;
+};
 
 export const mailSender = (provider: MailProvider) => ({
 	name: config.mail.fromName,
-	address: `no-reply@${mailFromDomain(provider)}`,
+	address:
+		provider === "smtp"
+			? config.smtp.user
+			: `no-reply@${mailFromDomain(provider)}`,
 });
 
 export const buildTransport = (
 	provider: MailProvider,
-): nodemailer.Transporter =>
-	provider === "ses"
+): nodemailer.Transporter => {
+	if (provider === "smtp") {
+		return nodemailer.createTransport({
+			host: config.smtp.host,
+			port: config.smtp.port,
+			secure: config.smtp.secure,
+			auth: { user: config.smtp.user, pass: config.smtp.pass },
+		});
+	}
+	return provider === "ses"
 		? nodemailer.createTransport({
 				/* @info - nodemailer's SES transport, handed the v2 command the rest of this
 				 *         project's AWS code uses. Credentials come from the environment the
@@ -54,6 +69,7 @@ export const buildTransport = (
 					pass: config.aws.resend.apiKey,
 				},
 			});
+};
 
 export class EmailService {
 	private static instance: EmailService;
@@ -78,7 +94,7 @@ export class EmailService {
 	}
 
 	private constructor() {
-		/* @info - Resend SMTP (smtp.resend.com) or SES, chosen by MAIL_PROVIDER. Same
+		/* @info - Resend SMTP (smtp.resend.com), SES or a generic SMTP server (Gmail), chosen by MAIL_PROVIDER. Same
 		 * nodemailer contract either way; only the endpoint and credentials differ, so
 		 * switching back is one environment value and a restart. */
 		this.transporter = buildTransport(config.mail.provider);
@@ -118,12 +134,15 @@ export class EmailService {
 		const html = template({ logoUrl: config.mail.logoUrl, ...options.locals });
 
 		const params: Record<string, any> = {
-			from: options.identifier
-				? {
-						name: config.mail.fromName,
-						address: `${options.identifier}@${this.domain}`,
-					}
-				: this.sender,
+			/* @info - smtp ignores the identifier: Gmail rewrites From to the signed-in
+			 * account, and identifier@domain would be a domain the owner may not have. */
+			from:
+				options.identifier && this.provider !== "smtp"
+					? {
+							name: config.mail.fromName,
+							address: `${options.identifier}@${this.domain}`,
+						}
+					: this.sender,
 			to: options.message.to,
 			subject: options.message.subject,
 			cc: options.message?.cc,

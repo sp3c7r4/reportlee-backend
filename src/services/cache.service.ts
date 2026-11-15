@@ -30,10 +30,18 @@ export class CacheService {
 	}
 
 	public getConnectionOptions() {
+		const { username, db, family, tls } = this.redis.options;
+		/* @info - BullMQ takes its own connection object, so URL parts (rediss, user, db,
+		 * ?family=6) must be forwarded or the queue connects differently from the cache
+		 * client. */
 		return {
 			host: this.redis.options.host,
 			port: this.redis.options.port,
 			password: this.redis.options.password,
+			...(username !== undefined && { username }),
+			...(db !== undefined && { db }),
+			...(family !== undefined && { family }),
+			...(tls !== undefined && { tls }),
 			maxRetriesPerRequest: null as null,
 		};
 	}

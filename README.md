@@ -93,6 +93,36 @@ never run by tooling.
 pm2 (`ecosystem.config.cjs`). Migrations run from the same bundle with
 `node dist/migrate.js`. Queues have a BullMQ dashboard at `/queue`.
 
+## Deploy to Railway
+
+One Railway project from this repo, two services plus the Railway Postgres and Redis plugins. Node 22.
+
+| Service | Build | Start |
+|---|---|---|
+| API | `npm ci && npm run build` | `node dist/server.js` |
+| Worker (no public domain) | `npm ci && npm run build` | `node dist/init.workers.js` |
+
+- The worker must be running, or no OTP or verification email is sent.
+- Give both services `POSTGRES_URI` and `REDIS_URI` as reference variables to the plugin URLs (for example `${{Postgres.DATABASE_URL}}` and `${{Redis.REDIS_URL}}`; plugin names may differ).
+- Migrations: run `node dist/migrate.js` once per deploy, as the API pre-deploy command or with `railway run node dist/migrate.js`. The build copies the SQL files to `dist/migrations`.
+- Regenerate the JWT key pair and `ENCRYPTION_KEY` for production (commands are in `.env.example`). The ones in the example file are throwaway.
+- `ORIGINS` (a JSON array string such as `["https://<app>.vercel.app"]`, exact origin, no trailing slash) and `FRONTEND_URL` must be the Vercel URL, or CORS rejects the frontend.
+- Set `HOSTNAME=0.0.0.0` explicitly on the API service, because some container runtimes export `HOSTNAME` as the container id. Railway injects `PORT`.
+- Gmail: turn on 2-step verification, create an app password, then set `MAIL_PROVIDER=smtp`, `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, `SMTP_USER` (the Gmail address) and `SMTP_PASS` (the app password). A personal account allows about 500 messages per day.
+- Switching to Resend later: `MAIL_PROVIDER=resend` plus `RESEND_API_KEY` and `RESEND_DOMAIN`, then restart both services.
+
+Environment variable names:
+
+- Runtime: `NODE_ENV` (`production`), `HOSTNAME`, `PORT`, `SERVER_DOMAIN` (bare host of the Railway API domain), `ROOT_DOMAIN`, `FRONTEND_URL`, `ORIGINS`
+- Data: `POSTGRES_URI`, `REDIS_URI`, `REDIS_CHANNEL_PREFIX` (optional)
+- Auth: `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`, `JWT_EXPIRES_IN`, `JWT_ISSUER`, `ENCRYPTION_KEY`
+- Mail: `MAIL_PROVIDER`, `MAIL_DOMAIN`, `MAIL_FROM_NAME`, `MAIL_LOGO_URL`
+- SMTP provider: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`
+- Resend provider: `RESEND_API_KEY`, `RESEND_DOMAIN`
+- Storage: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`, `AWS_S3_ENDPOINT`, `CDN_URL`
+
+The schema requires `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET` and `MAIL_DOMAIN` even when unused, so set placeholders. Uploads do not work until real AWS values exist. `MAIL_DOMAIN` is unused while `MAIL_PROVIDER=smtp`.
+
 ## What this deliberately does not include
 
 OAuth providers, payments, websockets beyond pub/sub fanout, image processing, and any
