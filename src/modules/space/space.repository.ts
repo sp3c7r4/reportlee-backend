@@ -76,6 +76,31 @@ export const updateSpaceRow = async (
 	return row;
 };
 
+/** @info - Frees the Head slot, but only when this Membership holds it. */
+export const clearHeadIf = async (
+	tx: Tx,
+	spaceId: number,
+	membershipId: number,
+) => {
+	await tx
+		.update(spaces)
+		.set({ headMembershipId: null })
+		.where(
+			and(eq(spaces.id, spaceId), eq(spaces.headMembershipId, membershipId)),
+		);
+};
+
+export const setHeadSlot = async (
+	tx: Tx,
+	spaceId: number,
+	membershipId: number,
+) => {
+	await tx
+		.update(spaces)
+		.set({ headMembershipId: membershipId })
+		.where(eq(spaces.id, spaceId));
+};
+
 /** @info - Active members (D26) per Space. */
 export const spaceMemberCounts = async (
 	tx: Tx,

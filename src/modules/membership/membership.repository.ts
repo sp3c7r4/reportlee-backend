@@ -1,4 +1,4 @@
-import { and, count, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import type { Tx } from "@/db/postgres.db";
 import { spaces } from "@/modules/space/space.model";
 import { users } from "@/modules/user/user.model";
@@ -154,6 +154,49 @@ export const countActiveInSpace = async (tx: Tx, spaceId: number) => {
 		.where(and(eq(memberships.spaceId, spaceId), isActiveMember()));
 	return Number(row?.total ?? 0);
 };
+
+/**
+ * @info - Locks the active Admin rows of a Workspace (D6, after the Workspace lock). Two requests that
+ * would each remove an Admin serialise here, so the count they read is the count that is true.
+ */
+export const lockActiveAdmins = async (tx: Tx, workspaceId: number) =>
+	tx
+		.select({ id: memberships.id })
+		.from(memberships)
+		.innerJoin(users, eq(users.id, memberships.userId))
+		.where(
+			and(
+				eq(memberships.workspaceId, workspaceId),
+				eq(memberships.role, "admin"),
+				isActiveMember(),
+			),
+		)
+		.for("update", { of: memberships });
+
+export const listRoster = async (
+	tx: Tx,
+	workspaceId: number,
+	includeInactive: boolean,
+) =>
+	tx
+		.select({
+			membership: memberships,
+			firstName: users.firstName,
+			lastName: users.lastName,
+			email: users.email,
+			personLive: sql<boolean>`(${users.deletedAt} IS NULL AND ${users.suspendedAt} IS NULL)`,
+			spaceName: spaces.name,
+		})
+		.from(memberships)
+		.innerJoin(users, eq(users.id, memberships.userId))
+		.leftJoin(spaces, eq(spaces.id, memberships.spaceId))
+		.where(
+			includeInactive
+				? eq(memberships.workspaceId, workspaceId)
+				: and(eq(memberships.workspaceId, workspaceId), isActiveMember()),
+		)
+		.orderBy(asc(sql`lower(${users.firstName})`), asc(memberships.id))
+		.limit(1000);
 
 export const insertMembership = async (tx: Tx, values: NewMembership) => {
 	const [row] = await tx.insert(memberships).values(values).returning();

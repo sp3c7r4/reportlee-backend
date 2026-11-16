@@ -1,5 +1,6 @@
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Tx } from "@/db/postgres.db";
+import { invitations } from "@/modules/invitation/invitation.model";
 import { isActiveMember } from "@/modules/membership/active";
 import { memberships } from "@/modules/membership/membership.model";
 import { users } from "@/modules/user/user.model";
@@ -71,6 +72,29 @@ export const slugExists = async (tx: Tx, slug: string): Promise<boolean> => {
 		.where(sql`lower(${workspaces.slug}) = ${slug.toLowerCase()}`)
 		.limit(1);
 	return Boolean(row);
+};
+
+/**
+ * @info - Seats in use: active members (D26) plus pending invitations that have not expired. A
+ * pending row past `expires_at` is only swept by an invitation create, so it is skipped here.
+ */
+export const seatsUsed = async (tx: Tx, workspaceId: number) => {
+	const [m] = await tx
+		.select({ total: count() })
+		.from(memberships)
+		.innerJoin(users, eq(users.id, memberships.userId))
+		.where(and(eq(memberships.workspaceId, workspaceId), isActiveMember()));
+	const [i] = await tx
+		.select({ total: count() })
+		.from(invitations)
+		.where(
+			and(
+				eq(invitations.workspaceId, workspaceId),
+				eq(invitations.status, "pending"),
+				sql`${invitations.expiresAt} > now()`,
+			),
+		);
+	return Number(m?.total ?? 0) + Number(i?.total ?? 0);
 };
 
 /** @info - Active members per Workspace (D26). */
