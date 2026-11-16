@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { healthCheck } from "@/helpers";
 import { authRouter } from "@/modules/auth";
+import {
+	invitationRouter,
+	workspaceInvitationRouter,
+} from "@/modules/invitation";
 import { meRouter } from "@/modules/me";
 import { memberRouter } from "@/modules/membership";
 import { notificationRouter } from "@/modules/notifications";
@@ -25,3 +29,5 @@ router.route("/me", meRouter);
 router.route("/workspaces", workspaceRouter);
 router.route("/workspaces/:wsId/spaces", spaceRouter);
 router.route("/workspaces/:wsId/members", memberRouter);
+router.route("/workspaces/:wsId/invitations", workspaceInvitationRouter);
+router.route("/invitations", invitationRouter);

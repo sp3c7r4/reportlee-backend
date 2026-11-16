@@ -22,12 +22,14 @@ import {
 	memberCounts,
 } from "@/modules/workspace/workspace.repository";
 import { MEMBERSHIP_MESSAGES } from "./membership.message";
-import type { MembershipRole } from "./membership.model";
+import type { MembershipRole, NewMembership } from "./membership.model";
 import {
 	type Caller,
 	countActiveInSpace,
+	findByUserWorkspace,
 	findMemberInWorkspace,
 	findUserBasics,
+	insertMembership,
 	listActiveForUser,
 	listRoster,
 	lockActiveAdmins,
@@ -93,6 +95,11 @@ export class MembershipService {
 
 	setRole = (tx: Tx, membershipId: number, role: MembershipRole) =>
 		updateMembership(tx, membershipId, { role });
+
+	byUser = (tx: Tx, workspaceId: number, userId: number) =>
+		findByUserWorkspace(tx, workspaceId, userId);
+
+	insert = (tx: Tx, values: NewMembership) => insertMembership(tx, values);
 
 	activeCountInSpace = (tx: Tx, spaceId: number) =>
 		countActiveInSpace(tx, spaceId);

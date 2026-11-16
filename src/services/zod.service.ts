@@ -6,6 +6,10 @@ import { sendErrorResponse } from "@/helpers";
 import { redactLog } from "@/helpers/log-redact.helper";
 import { serviceLogger } from "@/utils";
 
+export interface ValidateOptions {
+	log?: boolean;
+}
+
 /**
  * @info This is a validation engine for Zod
  * @description - Provides middleware for validating request bodies, query parameters, and route parameters using Zod schemas.
@@ -32,45 +36,60 @@ export class ZodEngine {
 	 * @returns {z.ZodSchema} - The validated schema
 	 */
 	validate = {
-		body: (schema: z.ZodSchema) => this.validateBody(schema),
+		body: (schema: z.ZodSchema, options?: ValidateOptions) =>
+			this.validateBody(schema, options),
 		params: (schema: z.ZodSchema) => this.validateParams(schema),
 		query: (schema: z.ZodSchema) => this.validateQuery(schema),
 		formData: (schema: z.ZodSchema) => this.validateFormData(schema),
 	};
 
-	private handleResult = (result: any, c: any): Response | undefined => {
-		if (!result.success) {
-			const issues = JSON.parse(result.error.message);
+	/**
+	 * @info - `quiet` keeps the request out of the logs. A route whose body holds an email, a token or
+	 * a link passes `{ log: false }` (D29). Default is unchanged, so every existing route logs as before.
+	 */
+	private handleResult =
+		(quiet = false) =>
+		(result: any, c: any): Response | undefined => {
+			if (!result.success) {
+				const issues = JSON.parse(result.error.message);
 
-			const errorMessages: Record<any, any> = {};
-			issues.forEach((issue: ZodIssue) => {
-				const { path, message } = issue;
-				errorMessages[path.join(".")] = message;
-			});
-			console.log(issues, redactLog(result));
-			return sendErrorResponse(c, errorMessages, StatusCodes.BAD_REQUEST);
-		}
-		/* @info - redacted: this line logged login bodies (plaintext password) and
-		 * token-bearing responses until it was found in the box logs. */
-		this.log.info(`Serialized result: ${JSON.stringify(redactLog(result))}`);
-	};
+				const errorMessages: Record<any, any> = {};
+				issues.forEach((issue: ZodIssue) => {
+					const { path, message } = issue;
+					errorMessages[path.join(".")] = message;
+				});
+				if (!quiet) console.log(issues, redactLog(result));
+				return sendErrorResponse(c, errorMessages, StatusCodes.BAD_REQUEST);
+			}
+			/* @info - redacted: this line logged login bodies (plaintext password) and
+			 * token-bearing responses until it was found in the box logs. */
+			if (!quiet) {
+				this.log.info(
+					`Serialized result: ${JSON.stringify(redactLog(result))}`,
+				);
+			}
+		};
 
 	/** @private */
-	private validateBody = (schema: z.ZodSchema) => {
-		return zValidator("json", schema, this.handleResult);
+	private validateBody = (schema: z.ZodSchema, options?: ValidateOptions) => {
+		return zValidator(
+			"json",
+			schema,
+			this.handleResult(options?.log === false),
+		);
 	};
 
 	private validateFormData = (schema: z.ZodSchema) => {
-		return zValidator("form", schema, this.handleResult);
+		return zValidator("form", schema, this.handleResult());
 	};
 
 	/** @private */
 	private validateParams = (schema: z.ZodSchema) => {
-		return zValidator("param", schema, this.handleResult);
+		return zValidator("param", schema, this.handleResult());
 	};
 
 	/** @private */
 	private validateQuery = (schema: z.ZodSchema) => {
-		return zValidator("query", schema, this.handleResult);
+		return zValidator("query", schema, this.handleResult());
 	};
 }

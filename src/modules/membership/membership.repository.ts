@@ -198,6 +198,24 @@ export const listRoster = async (
 		.orderBy(asc(sql`lower(${users.firstName})`), asc(memberships.id))
 		.limit(1000);
 
+export const findByUserWorkspace = async (
+	tx: Tx,
+	workspaceId: number,
+	userId: number,
+) => {
+	const [row] = await tx
+		.select()
+		.from(memberships)
+		.where(
+			and(
+				eq(memberships.workspaceId, workspaceId),
+				eq(memberships.userId, userId),
+			),
+		)
+		.limit(1);
+	return row ?? null;
+};
+
 export const insertMembership = async (tx: Tx, values: NewMembership) => {
 	const [row] = await tx.insert(memberships).values(values).returning();
 	if (!row) throw new Error("membership insert returned no row");
