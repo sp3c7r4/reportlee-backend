@@ -1,14 +1,24 @@
 import { eq } from "drizzle-orm";
-import { user_roles } from "@/db/postgres.schema";
+import { getReader } from "@/db/postgres.db";
+import { user_roles, users } from "@/db/postgres.schema";
+import { CodedForbiddenError } from "@/errors";
 import {
 	generateAuthenticatedData,
 	sanitizeUser,
 } from "@/helpers/auth/auth.helpers";
-import { throwBadRequestError, throwNotFoundError } from "@/helpers/errors";
+import {
+	throwBadRequestError,
+	throwNotFoundError,
+	throwUnauthorizedError,
+} from "@/helpers/errors";
 import { withPresignedUrl } from "@/helpers/storage.helper";
 import type { IAuthData } from "@/interfaces";
 import { UserRepository } from "@/modules/user/user.repository";
 import { UserRoleRepository } from "@/modules/user/user-role.repository";
+import {
+	EMAIL_NOT_VERIFIED_CODE,
+	WORKSPACE_MESSAGES,
+} from "@/modules/workspace/workspace.message";
 import { CacheService } from "@/services/cache.service";
 import { EncryptionService } from "@/services/encryption.service";
 import { logger } from "@/utils";
@@ -29,6 +39,34 @@ export class UserService {
 	}
 
 	private constructor() {}
+
+	/**
+	 * @info - D25: identity and verified state come from the user row, never from the 30 minute
+	 * session snapshot. 401 for a deleted or suspended person, 403 EMAIL_NOT_VERIFIED for an
+	 * unverified one. Returns the lower-cased email.
+	 */
+	assertVerified = async (userId: number): Promise<string> => {
+		const [row] = await getReader()
+			.select({
+				email: users.email,
+				emailVerified: users.emailVerified,
+				deletedAt: users.deletedAt,
+				suspendedAt: users.suspendedAt,
+			})
+			.from(users)
+			.where(eq(users.id, userId))
+			.limit(1);
+		if (!row || row.deletedAt || row.suspendedAt) {
+			return throwUnauthorizedError(WORKSPACE_MESSAGES.AUTH_REQUIRED);
+		}
+		if (!row.emailVerified) {
+			throw new CodedForbiddenError(
+				WORKSPACE_MESSAGES.EMAIL_NOT_VERIFIED,
+				EMAIL_NOT_VERIFIED_CODE,
+			);
+		}
+		return row.email.toLowerCase();
+	};
 
 	/** @info - Admin-only (route guard). One role per user; see replaceRoleGuarded. */
 	changeRole = async (targetId: number, role: string) => {

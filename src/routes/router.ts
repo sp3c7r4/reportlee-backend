@@ -5,6 +5,7 @@ import { meRouter } from "@/modules/me";
 import { notificationRouter } from "@/modules/notifications";
 import { uploadRouter } from "@/modules/upload";
 import { userRouter } from "@/modules/user/user.routes";
+import { workspaceRouter } from "@/modules/workspace";
 
 /**
  * @info - Every versioned route hangs off this one router, mounted at /api/v1.
@@ -19,3 +20,4 @@ router.route("/user", userRouter);
 router.route("/notifications", notificationRouter);
 router.route("/upload", uploadRouter);
 router.route("/me", meRouter);
+router.route("/workspaces", workspaceRouter);

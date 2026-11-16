@@ -4,7 +4,11 @@ import { spaces } from "@/modules/space/space.model";
 import { users } from "@/modules/user/user.model";
 import { workspaces } from "@/modules/workspace/workspace.model";
 import { isActiveMember } from "./active";
-import { type MembershipRole, memberships } from "./membership.model";
+import {
+	type MembershipRole,
+	memberships,
+	type NewMembership,
+} from "./membership.model";
 
 /** @info - Plain `(tx, ...)` functions (D6). Pass `getReader()` outside a transaction. */
 
@@ -102,4 +106,10 @@ export const findUserBasics = async (tx: Tx, userId: number) => {
 		)
 		.limit(1);
 	return row ?? null;
+};
+
+export const insertMembership = async (tx: Tx, values: NewMembership) => {
+	const [row] = await tx.insert(memberships).values(values).returning();
+	if (!row) throw new Error("membership insert returned no row");
+	return row;
 };
