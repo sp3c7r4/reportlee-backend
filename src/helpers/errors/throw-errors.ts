@@ -7,6 +7,7 @@ import {
 	NotFoundError,
 	RateLimitError,
 	UnauthorizedError,
+	UnprocessableError,
 } from "@/errors";
 
 export const throwNotFoundError = (message: string): never => {
@@ -39,4 +40,8 @@ export const throwRateLimitError = (message: string): never => {
 
 export const throwGoneError = (message: string): never => {
 	throw new GoneError(message);
+};
+
+export const throwUnprocessableError = (message: string): never => {
+	throw new UnprocessableError(message);
 };

@@ -34,6 +34,8 @@ const SENSITIVE_KEYS = new Set([
 	"cardnumber",
 	"pin",
 	"accountnumber",
+	/* @info - A workspace invitation link carries the single-use token. */
+	"inviteurl",
 ]);
 
 export const REDACTED = "<redacted>";

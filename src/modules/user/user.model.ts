@@ -50,6 +50,9 @@ export const users = pgTable(
 				},
 			}),
 		suspendedAt: timestamp("suspended_at"),
+		/** @info - The Workspace the person last used. The foreign key lives in SQL only (no import of
+		 * workspaces here, so no new import cycle). */
+		lastWorkspaceId: integer("last_workspace_id"),
 		...softDelete,
 		...timestamps,
 	},

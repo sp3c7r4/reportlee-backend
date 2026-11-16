@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ReasonPhrases, StatusCodes } from "http-status-codes";
+import { CodedForbiddenError } from "@/errors/CodedForbidden";
 import { createConflictError } from "@/errors/Conflict";
 import { sendErrorResponse } from "@/helpers";
 
@@ -77,6 +78,8 @@ export const errorHandler = (err: any, c: Context) => {
 		c,
 		{
 			message: errorObject.message || ReasonPhrases.INTERNAL_SERVER_ERROR,
+			/* @info - Only a coded 403 adds a field. Every other error body is just a message. */
+			...(err instanceof CodedForbiddenError && { code: err.code }),
 		},
 		errorObject.status || StatusCodes.INTERNAL_SERVER_ERROR,
 	);

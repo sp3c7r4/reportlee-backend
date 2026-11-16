@@ -50,7 +50,9 @@ export class BaseQueueService<T extends { idempotencyKey?: string }> {
 		});
 	};
 
-	add = async (jobName: string, data: T) => {
+	/** @info - `opts` is spread last, so one caller can keep a job shorter than the queue default
+	 * (an invitation link must not sit in Redis for an hour after a successful send). */
+	add = async (jobName: string, data: T, opts?: JobsOptions) => {
 		/** @info - Generate idempotency key if caller didn't provide one */
 		const key = data.idempotencyKey ?? `${jobName}:${randomUUID()}`;
 
@@ -72,6 +74,7 @@ export class BaseQueueService<T extends { idempotencyKey?: string }> {
 				},
 				deduplication: { id: key },
 				...this.jobOptions,
+				...opts,
 			},
 		);
 	};

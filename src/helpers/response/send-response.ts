@@ -4,13 +4,20 @@ import type { WSContext } from "hono/ws";
 import { StatusCodes } from "http-status-codes";
 import { redactLog } from "@/helpers/log-redact.helper";
 
+/** @info - `log: false` keeps a body out of the logs. Routes that return emails, names or invite
+ * links pass it, so personal data is never written to stdout. Default is unchanged. */
+export interface SuccessResponseOptions {
+	log?: boolean;
+}
+
 export const sendSuccessResponse = (
 	c: Context,
 	data: unknown | unknown[],
 	statusCode: ContentfulStatusCode = StatusCodes.OK,
+	options: SuccessResponseOptions = {},
 ) => {
 	/* @info - redacted: success bodies carry accessToken, refreshToken and signup tokens. */
-	console.log("Response: ", redactLog(data));
+	if (options.log !== false) console.log("Response: ", redactLog(data));
 	return c.json(
 		{
 			timestamp: new Date().toISOString(),

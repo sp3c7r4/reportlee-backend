@@ -29,3 +29,14 @@ export const getDb = () => {
 	if (!_db) throw new Error("Database not initialized");
 	return _db;
 };
+
+/** @info - The handle a transaction callback receives. Repository functions that take part in a
+ * locked transaction are typed with it. */
+export type Tx = Parameters<
+	Parameters<ReturnType<typeof getDb>["transaction"]>[0]
+>[0];
+
+/** @info - The pool handle typed as Tx. A pool handle and a transaction handle share one query
+ * builder API, so a single set of `(tx: Tx, ...)` repository functions serves both a read outside
+ * a transaction and a write inside one. */
+export const getReader = (): Tx => getDb() as unknown as Tx;
