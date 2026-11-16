@@ -44,7 +44,7 @@ export class EmailWorkerService extends IdempotentWorkerService<EmailJobData> {
 		try {
 			logger.info(`Processing email job ${job.id}`, {
 				jobName: job.name,
-				recipient: job.data?.message?.to,
+				template: job.data?.template,
 			});
 			const { message, template, locals } = job.data;
 
@@ -55,7 +55,7 @@ export class EmailWorkerService extends IdempotentWorkerService<EmailJobData> {
 			logger.error(`Error processing email job ${job.id}`, {
 				error: error.message,
 				stack: error.stack,
-				recipient: job.data?.message?.to,
+				template: job.data?.template,
 			});
 			throw error;
 		}
