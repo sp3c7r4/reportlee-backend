@@ -1,4 +1,4 @@
-import { getReader } from "@/db/postgres.db";
+import { getReader, type Tx } from "@/db/postgres.db";
 import { throwUnauthorizedError } from "@/helpers/errors";
 import {
 	toMembershipDto,
@@ -6,11 +6,15 @@ import {
 } from "@/modules/workspace/workspace.dto";
 import { WORKSPACE_MESSAGES } from "@/modules/workspace/workspace.message";
 import { memberCounts } from "@/modules/workspace/workspace.repository";
+import type { MembershipRole } from "./membership.model";
 import {
 	type Caller,
+	countActiveInSpace,
+	findMemberInWorkspace,
 	findUserBasics,
 	listActiveForUser,
 	resolveCaller,
+	updateMembership,
 } from "./membership.repository";
 
 export type { Caller } from "./membership.repository";
@@ -35,6 +39,16 @@ export class MembershipService {
 		userId: number,
 		workspaceId: number,
 	): Promise<Caller | null> => resolveCaller(getReader(), userId, workspaceId);
+
+	/* @info - Transaction-scoped helpers other modules call instead of reaching into this repository. */
+	memberInWorkspace = (tx: Tx, workspaceId: number, membershipId: number) =>
+		findMemberInWorkspace(tx, workspaceId, membershipId);
+
+	setRole = (tx: Tx, membershipId: number, role: MembershipRole) =>
+		updateMembership(tx, membershipId, { role });
+
+	activeCountInSpace = (tx: Tx, spaceId: number) =>
+		countActiveInSpace(tx, spaceId);
 
 	/** @info - False for a deleted or suspended person: their session must be refused with a 401. */
 	isLive = async (userId: number): Promise<boolean> =>

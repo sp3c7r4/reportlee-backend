@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { StatusCodes } from "http-status-codes";
 import { sendSuccessResponse } from "@/helpers/response";
+import { validatedBody } from "@/helpers/validated";
 import { callerId } from "@/middlewares/auth/workspace-guards";
 import { MeService } from "./me.service";
 
@@ -22,7 +23,7 @@ export class MeController {
 	};
 
 	putLastWorkspace = async (c: Context) => {
-		const { workspaceId } = await c.req.json();
+		const { workspaceId } = validatedBody(c);
 		const data = await this.meService.setLastWorkspace(
 			callerId(c),
 			Number(workspaceId),

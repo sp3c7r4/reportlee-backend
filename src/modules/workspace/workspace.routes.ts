@@ -19,28 +19,33 @@ const controller = WorkspaceController.getInstance();
 const jwtService = JwtService.getInstance();
 const zodEngine = ZodEngine.getInstance();
 
-/* @info - Guard order: validateToken, callerId, Zod params, requireMembership (404), role (403), then the service. */
-workspaceRouter.use(jwtService.validateToken, requireCaller);
+/* @info - Guard order: validateToken, callerId, Zod params, requireMembership (404), role (403), then the service.
+ * Applied per route, not with use(), so routers mounted under /workspaces/:wsId do not run it twice. */
+const auth = [jwtService.validateToken, requireCaller];
 
 /* @info - Specific paths before /:wsId. */
 workspaceRouter.get(
 	"/slug-available",
+	...auth,
 	zodEngine.validate.query(slugQuerySchema),
 	controller.slugAvailable,
 );
 workspaceRouter.post(
 	"/",
+	...auth,
 	zodEngine.validate.body(createWorkspaceSchema),
 	controller.create,
 );
 workspaceRouter.get(
 	"/:wsId",
+	...auth,
 	zodEngine.validate.params(wsIdParamSchema),
 	requireMembership,
 	controller.get,
 );
 workspaceRouter.patch(
 	"/:wsId",
+	...auth,
 	zodEngine.validate.params(wsIdParamSchema),
 	requireMembership,
 	requireWorkspaceRole("admin"),

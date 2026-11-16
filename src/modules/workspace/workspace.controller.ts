@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { StatusCodes } from "http-status-codes";
 import { sendSuccessResponse } from "@/helpers/response";
+import { validatedBody } from "@/helpers/validated";
 import { callerId } from "@/middlewares/auth/workspace-guards";
 import { WorkspaceService } from "./workspace.service";
 
@@ -23,7 +24,7 @@ export class WorkspaceController {
 	};
 
 	create = async (c: Context) => {
-		const body = await c.req.json();
+		const body = validatedBody(c);
 		const data = await this.service.create(callerId(c), body);
 		return sendSuccessResponse(c, data, StatusCodes.CREATED, { log: false });
 	};
@@ -34,7 +35,7 @@ export class WorkspaceController {
 	};
 
 	update = async (c: Context) => {
-		const body = await c.req.json();
+		const body = validatedBody(c);
 		const data = await this.service.update(c.get("caller"), body);
 		return sendSuccessResponse(c, data, StatusCodes.OK, { log: false });
 	};

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import type { Tx } from "@/db/postgres.db";
 import { spaces } from "@/modules/space/space.model";
 import { users } from "@/modules/user/user.model";
@@ -106,6 +106,53 @@ export const findUserBasics = async (tx: Tx, userId: number) => {
 		)
 		.limit(1);
 	return row ?? null;
+};
+
+/** @info - A Membership of this Workspace joined to its person, whatever its state. */
+export const findMemberInWorkspace = async (
+	tx: Tx,
+	workspaceId: number,
+	membershipId: number,
+) => {
+	const [row] = await tx
+		.select({
+			membership: memberships,
+			personLive: sql<boolean>`(${users.deletedAt} IS NULL AND ${users.suspendedAt} IS NULL)`,
+		})
+		.from(memberships)
+		.innerJoin(users, eq(users.id, memberships.userId))
+		.where(
+			and(
+				eq(memberships.id, membershipId),
+				eq(memberships.workspaceId, workspaceId),
+			),
+		)
+		.limit(1);
+	return row ?? null;
+};
+
+export const updateMembership = async (
+	tx: Tx,
+	membershipId: number,
+	values: Partial<Pick<NewMembership, "role" | "spaceId" | "active">>,
+) => {
+	const [row] = await tx
+		.update(memberships)
+		.set(values)
+		.where(eq(memberships.id, membershipId))
+		.returning();
+	if (!row) throw new Error("membership update returned no row");
+	return row;
+};
+
+/** @info - Active members (D26) of one Space. */
+export const countActiveInSpace = async (tx: Tx, spaceId: number) => {
+	const [row] = await tx
+		.select({ total: count() })
+		.from(memberships)
+		.innerJoin(users, eq(users.id, memberships.userId))
+		.where(and(eq(memberships.spaceId, spaceId), isActiveMember()));
+	return Number(row?.total ?? 0);
 };
 
 export const insertMembership = async (tx: Tx, values: NewMembership) => {
