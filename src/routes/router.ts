@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { healthCheck } from "@/helpers";
 import { authRouter } from "@/modules/auth";
+import { meRouter } from "@/modules/me";
 import { notificationRouter } from "@/modules/notifications";
 import { uploadRouter } from "@/modules/upload";
 import { userRouter } from "@/modules/user/user.routes";
@@ -17,3 +18,4 @@ router.route("/auth", authRouter);
 router.route("/user", userRouter);
 router.route("/notifications", notificationRouter);
 router.route("/upload", uploadRouter);
+router.route("/me", meRouter);
