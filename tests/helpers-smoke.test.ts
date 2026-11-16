@@ -34,7 +34,7 @@ describe("test harness", () => {
 		const app = new Hono();
 		app.onError(errorHandler);
 		app.get("/who", JwtService.getInstance().validateToken, (c) =>
-			c.json({ id: c.get("authData").id }),
+			c.json({ id: (c as any).get("authData").id }),
 		);
 		const headers = await sessionFor(user.id);
 		const ok = await app.request("/who", { headers });

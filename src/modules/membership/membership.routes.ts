@@ -21,7 +21,7 @@ const scope = [
 	requireCaller,
 	zodEngine.validate.params(wsIdParamSchema),
 	requireMembership,
-];
+] as const;
 
 memberRouter.get("/", ...scope, controller.list);
 memberRouter.patch(

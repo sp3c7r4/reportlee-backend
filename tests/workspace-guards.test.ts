@@ -36,11 +36,11 @@ describe("workspace guards", () => {
 			guards.requireCaller,
 			zod.validate.params(z.object({ wsId: idString })),
 			guards.requireMembership,
-		];
+		] as const;
 		app = new Hono();
 		app.onError(errorHandler);
 		app.get("/ws/:wsId/any", ...scope, (c) =>
-			c.json({ caller: c.get("caller") }),
+			c.json({ caller: (c as any).get("caller") }),
 		);
 		app.post(
 			"/ws/:wsId/admin",
@@ -62,7 +62,7 @@ describe("workspace guards", () => {
 
 	const get = async (path: string, headers?: Record<string, string>) => {
 		const res = await app.request(path, { headers });
-		return { status: res.status, body: await res.json() };
+		return { status: res.status, body: (await res.json()) as any };
 	};
 
 	it("answers 401 without a token", async () => {
@@ -216,7 +216,7 @@ describe("sendSuccessResponse log option (D29)", () => {
 				: sendSuccessResponse(c, { who: "ada@example.com" }, 200, options),
 		);
 		const res = await app.request("/x");
-		return { status: res.status, body: await res.json() };
+		return { status: res.status, body: (await res.json()) as any };
 	};
 
 	it("still logs for existing callers", async () => {

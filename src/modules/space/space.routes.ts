@@ -25,7 +25,7 @@ const scope = [
 	requireCaller,
 	zodEngine.validate.params(wsIdParamSchema),
 	requireMembership,
-];
+] as const;
 
 spaceRouter.get("/", ...scope, controller.list);
 spaceRouter.post(

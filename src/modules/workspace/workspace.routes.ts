@@ -21,7 +21,7 @@ const zodEngine = ZodEngine.getInstance();
 
 /* @info - Guard order: validateToken, callerId, Zod params, requireMembership (404), role (403), then the service.
  * Applied per route, not with use(), so routers mounted under /workspaces/:wsId do not run it twice. */
-const auth = [jwtService.validateToken, requireCaller];
+const auth = [jwtService.validateToken, requireCaller] as const;
 
 /* @info - Specific paths before /:wsId. */
 workspaceRouter.get(

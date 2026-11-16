@@ -25,7 +25,7 @@ const scope = [
 	requireCaller,
 	zodEngine.validate.params(wsIdParamSchema),
 	requireMembership,
-];
+] as const;
 
 workspaceInvitationRouter.get(
 	"/",
@@ -55,7 +55,7 @@ workspaceInvitationRouter.delete(
  */
 export const invitationRouter = new Hono({ strict: true });
 
-const auth = [jwtService.validateToken, requireCaller];
+const auth = [jwtService.validateToken, requireCaller] as const;
 
 invitationRouter.post(
 	"/preview",
