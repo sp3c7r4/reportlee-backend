@@ -283,7 +283,7 @@ export class InvitationService {
 	revoke = async (caller: Caller, invitationId: number) =>
 		getDb().transaction(async (tx) => {
 			const row = await findInWorkspace(tx, caller.workspaceId, invitationId);
-			if (!row || row.status !== "pending") {
+			if (row?.status !== "pending") {
 				return throwNotFoundError(INVITATION_MESSAGES.NOT_FOUND);
 			}
 			const owns = row.invitedByMembershipId === caller.membershipId;
