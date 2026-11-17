@@ -104,6 +104,22 @@ describe("smtp mail provider", () => {
 		expect(logged()).not.toContain("123456");
 	});
 
+	it("logs the template but never the recipient address after a send", async () => {
+		await send();
+		expect(mocks.info).toHaveBeenCalledWith("Email sent (template verify-otp)");
+		expect(logged()).not.toContain("user@example.com");
+		expect(logged()).not.toContain("@");
+	});
+
+	it("scrubs an address quoted by the transport error", async () => {
+		mocks.sendMail.mockRejectedValueOnce(
+			new Error("550 No such user <user@example.com>"),
+		);
+		await expect(send()).rejects.toThrow();
+		expect(logged()).toContain("550 No such user");
+		expect(logged()).not.toContain("user@example.com");
+	});
+
 	it("logs a rejected send without body or OTP, then rethrows so BullMQ retries", async () => {
 		mocks.sendMail.mockRejectedValueOnce(new Error("auth failed"));
 		await expect(send()).rejects.toThrow("auth failed");

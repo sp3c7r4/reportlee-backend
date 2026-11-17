@@ -25,6 +25,41 @@ export const sweepExpired = async (tx: Tx, workspaceId: number) => {
 		);
 };
 
+/** @info - Fixed key for pg_advisory_xact_lock: every invitation create queues on it, across Workspaces. */
+const INVITE_PLATFORM_LOCK_KEY = 7_204_002;
+
+/**
+ * @info - The Workspace lock only serialises one Workspace, so the platform count needs its own
+ * lock. Taken after the Workspace lock, always in that order, and released at commit.
+ */
+export const lockInvitePlatform = async (tx: Tx) => {
+	await tx.execute(
+		sql`select pg_advisory_xact_lock(${INVITE_PLATFORM_LOCK_KEY})`,
+	);
+};
+
+/**
+ * @info - Rows created in the last 24 hours by the database clock, whatever their status, so
+ * revoking or accepting never frees quota. `workspaceId` null counts the whole platform.
+ */
+export const countCreatedLast24h = async (
+	tx: Tx,
+	workspaceId: number | null,
+): Promise<number> => {
+	const [row] = await tx
+		.select({ n: sql<number>`count(*)::int` })
+		.from(invitations)
+		.where(
+			and(
+				workspaceId === null
+					? undefined
+					: eq(invitations.workspaceId, workspaceId),
+				sql`${invitations.createdAt} > now() - interval '24 hours'`,
+			),
+		);
+	return row?.n ?? 0;
+};
+
 export const insertInvitation = async (
 	tx: Tx,
 	values: {

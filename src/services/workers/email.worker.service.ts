@@ -1,6 +1,7 @@
 import type { Job } from "bullmq";
 import { IdempotentWorkerService } from "@/bases";
 import { QueueNames } from "@/enums";
+import { redactEmails } from "@/helpers/log-redact.helper";
 import { EmailService } from "@/services/mail.service";
 import { logger } from "@/utils";
 
@@ -53,8 +54,8 @@ export class EmailWorkerService extends IdempotentWorkerService<EmailJobData> {
 			logger.info(`Email job ${job.id} processed successfully`);
 		} catch (error: any) {
 			logger.error(`Error processing email job ${job.id}`, {
-				error: error.message,
-				stack: error.stack,
+				error: redactEmails(String(error?.message ?? "")),
+				stack: redactEmails(String(error?.stack ?? "")),
 				template: job.data?.template,
 			});
 			throw error;

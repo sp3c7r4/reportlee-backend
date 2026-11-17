@@ -66,3 +66,9 @@ export const redactLog = <T>(value: T, depth = 0): T => {
 	}
 	return value;
 };
+
+/* @info - Error text from SMTP and Redis can quote the address a job was sent to. */
+const EMAIL_PATTERN = /[^\s<>"',;()]+@[^\s<>"',;()]+/g;
+
+export const redactEmails = (text: string): string =>
+	text.replace(EMAIL_PATTERN, "<email>");

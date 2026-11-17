@@ -1,8 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { config } from "@/config";
+import {
+	INVITE_DAILY_LIMIT_PER_WORKSPACE,
+	INVITE_DAILY_LIMIT_PLATFORM,
+} from "@/constants";
 import { getDb, getReader, type Tx } from "@/db/postgres.db";
 import { EmailJobNames, EmailTemplates } from "@/enums";
-import { CodedForbiddenError } from "@/errors";
+import { CodedForbiddenError, CodedRateLimitError } from "@/errors";
 import {
 	throwBadRequestError,
 	throwConflictError,
@@ -32,18 +36,22 @@ import { EmailQueueService } from "@/services/queues/email.queue.service";
 import { logger } from "@/utils";
 import {
 	INVITATION_MESSAGES,
+	INVITE_DAILY_LIMIT_CODE,
 	INVITE_EMAIL_MISMATCH_CODE,
 	INVITE_EXPIRY_DAYS,
+	INVITE_PLATFORM_LIMIT_CODE,
 } from "./invitation.message";
 import type { Invitation } from "./invitation.model";
 import {
 	acceptIfPending,
+	countCreatedLast24h,
 	findByTokenHash,
 	findInWorkspace,
 	findMemberByEmail,
 	insertInvitation,
 	listByIds,
 	listPending,
+	lockInvitePlatform,
 	pendingForEmail,
 	pendingHeadInviteForSpace,
 	revokeIfPending,
@@ -159,6 +167,7 @@ export class InvitationService {
 				);
 				checked.push({ input, spaceId });
 			}
+			await this.assertDailyLimits(tx, caller.workspaceId, rows.length);
 			await this.seats.assertSeat(tx, workspace, rows.length);
 
 			const out: Array<{ row: Invitation; token: string }> = [];
@@ -225,6 +234,33 @@ export class InvitationService {
 			}
 		}
 		return result;
+	};
+
+	/**
+	 * @info - Call inside the Workspace lock. The platform lock is taken here, after it, so two
+	 * creates in different Workspaces cannot both spend the last platform invitation. A batch that
+	 * would cross a limit is refused whole: nothing is written or queued, no seat is taken.
+	 */
+	private assertDailyLimits = async (
+		tx: Tx,
+		workspaceId: number,
+		batch: number,
+	) => {
+		const forWorkspace = await countCreatedLast24h(tx, workspaceId);
+		if (forWorkspace + batch > INVITE_DAILY_LIMIT_PER_WORKSPACE) {
+			throw new CodedRateLimitError(
+				INVITATION_MESSAGES.DAILY_LIMIT,
+				INVITE_DAILY_LIMIT_CODE,
+			);
+		}
+		await lockInvitePlatform(tx);
+		const forPlatform = await countCreatedLast24h(tx, null);
+		if (forPlatform + batch > INVITE_DAILY_LIMIT_PLATFORM) {
+			throw new CodedRateLimitError(
+				INVITATION_MESSAGES.PLATFORM_LIMIT,
+				INVITE_PLATFORM_LIMIT_CODE,
+			);
+		}
 	};
 
 	/** @info - Rules 3 and 4 of "Invitation create rules". Nothing is written. */

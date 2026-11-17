@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { type JobsOptions, Queue, QueueEvents } from "bullmq";
 import { TTL } from "@/constants";
+import { redactEmails } from "@/helpers/log-redact.helper";
 import { CacheService } from "@/services/cache.service";
 import { logger } from "@/utils";
 
@@ -46,7 +47,9 @@ export class BaseQueueService<T extends { idempotencyKey?: string }> {
 
 	_setupJobListeners = () => {
 		this.queueEvents.on("failed", async ({ jobId, failedReason }) => {
-			logger.error(`${this.alias} job ${jobId} failed: ${failedReason}`);
+			logger.error(
+				`${this.alias} job ${jobId} failed: ${redactEmails(failedReason ?? "")}`,
+			);
 		});
 	};
 

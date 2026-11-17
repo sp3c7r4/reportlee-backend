@@ -14,6 +14,10 @@ export const INVITATION_MESSAGES = {
 	ACCESS_TURNED_OFF:
 		"Your access was turned off. Ask an Admin to reactivate you.",
 	SPACE_ARCHIVED: "This Space is archived. Ask for a new invitation.",
+	DAILY_LIMIT:
+		"Daily invite limit reached. You can send more invitations tomorrow.",
+	PLATFORM_LIMIT:
+		"Invitations are paused for today because of high demand. Please try again tomorrow.",
 	mismatch: (masked: string) =>
 		`This invitation was sent to ${masked}. Sign in with that address.`,
 	subject: (workspaceName: string) =>
@@ -21,4 +25,6 @@ export const INVITATION_MESSAGES = {
 } as const;
 
 export const INVITE_EMAIL_MISMATCH_CODE = "INVITE_EMAIL_MISMATCH";
+export const INVITE_DAILY_LIMIT_CODE = "INVITE_DAILY_LIMIT";
+export const INVITE_PLATFORM_LIMIT_CODE = "INVITE_PLATFORM_LIMIT";
 export const INVITE_EXPIRY_DAYS = 7;

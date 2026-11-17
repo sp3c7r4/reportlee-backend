@@ -5,6 +5,7 @@ import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import Handlebars from "handlebars";
 import nodemailer from "nodemailer";
 import { config } from "@/config";
+import { redactEmails } from "@/helpers/log-redact.helper";
 import type { EmailOptions } from "@/interfaces";
 import { logger } from "@/utils";
 
@@ -158,13 +159,14 @@ export class EmailService {
 
 		try {
 			await this.transporter.sendMail(params);
-			this.log.info(`Email sent to ${options.message.to}`);
+			this.log.info(`Email sent (template ${options.template})`);
 		} catch (e) {
 			/* @info - Logs the transport error and template name only, never the body, locals
-			 * (OTP) or recipient. Rethrown so BullMQ marks the job failed and retries it;
+			 * (OTP) or recipient. The transport message can quote the address, so it is scrubbed.
+			 * Rethrown so BullMQ marks the job failed and retries it;
 			 * swallowing it here made every failed send look complete and lost the email. */
 			this.log.error(
-				`Failed to send ${options.template} email: ${e instanceof Error ? e.message : "Unknown error"}`,
+				`Failed to send ${options.template} email: ${e instanceof Error ? redactEmails(e.message) : "Unknown error"}`,
 			);
 			throw e;
 		}

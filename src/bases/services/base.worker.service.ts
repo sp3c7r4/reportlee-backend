@@ -1,4 +1,5 @@
 import { type Job, Worker } from "bullmq";
+import { redactEmails } from "@/helpers/log-redact.helper";
 import { CacheService } from "@/services/cache.service";
 import { logger } from "@/utils";
 
@@ -97,10 +98,12 @@ export abstract class BaseWorkerService<T> {
 
 			logger.info(`[${this.alias}] Job ${job.id} completed`);
 		} catch (error: any) {
+			/* @info - No job data: an email job carries the recipient, the OTP or the invite link.
+			 * The error text is scrubbed because SMTP errors can quote the address. */
 			logger.error(`[${this.alias}] Job ${job.id} failed`, {
-				error: error.message,
-				stack: error.stack,
-				data: job.data,
+				name: job.name,
+				error: redactEmails(String(error?.message ?? "")),
+				stack: redactEmails(String(error?.stack ?? "")),
 			});
 			throw error;
 		}
