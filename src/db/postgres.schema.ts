@@ -4,6 +4,8 @@ export * from "@/modules/audit/audit-log.model";
 export * from "@/modules/invitation/invitation.model";
 export * from "@/modules/membership/membership.model";
 export * from "@/modules/notifications/notification.model";
+export * from "@/modules/report/report.model";
+export * from "@/modules/schedule/schedule.model";
 export * from "@/modules/space/space.model";
 export * from "@/modules/user/user.model";
 export * from "@/modules/user/user-role.model";

@@ -33,6 +33,8 @@ export const workspaces = pgTable(
 		timeZone: varchar("time_zone", { length: 64 }).default("UTC").notNull(),
 		locationTagging: boolean("location_tagging").default(false).notNull(),
 		readOnly: boolean("read_only").default(false).notNull(),
+		/** @info - Added by 0002_reports.sql. Minutes an author may edit after a reviewer first sees a report. */
+		editWindowMinutes: integer("edit_window_minutes").default(30).notNull(),
 		createdBy: integer("created_by")
 			.notNull()
 			.references(() => users.id),

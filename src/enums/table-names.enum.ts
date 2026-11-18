@@ -11,4 +11,9 @@ export enum TableNames {
 	MEMBERSHIPS = "memberships",
 	INVITATIONS = "invitations",
 	AUDIT_LOGS = "audit_logs",
+	WORKSPACE_SCHEDULES = "workspace_schedules",
+	REPORTING_PERIODS = "reporting_periods",
+	REPORTS = "reports",
+	REPORT_REVISIONS = "report_revisions",
+	REPORT_EVENTS = "report_events",
 }

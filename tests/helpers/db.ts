@@ -46,6 +46,11 @@ export const applyMigration = async (file: string) => {
 };
 
 const SLICE_TABLES = [
+	"report_events",
+	"report_revisions",
+	"reports",
+	"reporting_periods",
+	"workspace_schedules",
 	"audit_logs",
 	"invitations",
 	"memberships",
@@ -65,6 +70,7 @@ export const setupTestDb = async () => {
 	).rows as { present: boolean }[];
 	if (!row?.present) await applyMigration("0000_clear_rage.sql");
 	await applyMigration("0001_workspaces_people.sql");
+	await applyMigration("0002_reports.sql");
 };
 
 /** @info - Empties every table a slice test touches. Safe: the database is a `_test` one. */
@@ -77,9 +83,18 @@ export const resetTestDb = async () => {
 	);
 };
 
-/** @info - Drops what 0001 created, so a test can run it on an empty slice. */
-export const dropSliceObjects = async () => {
+/** @info - Drops what 0002 created, so a test can run it on a database that only has 0001. */
+export const dropReportObjects = async () => {
 	assertLocalTestDb();
+	await getDb().execute(
+		sql.raw(
+			`DROP TABLE IF EXISTS "report_events", "report_revisions", "reports", "reporting_periods", "workspace_schedules" CASCADE; ALTER TABLE IF EXISTS "workspaces" DROP CONSTRAINT IF EXISTS "workspaces_edit_window_chk"; ALTER TABLE IF EXISTS "workspaces" DROP COLUMN IF EXISTS "edit_window_minutes"; DROP TYPE IF EXISTS "schedule_cadence", "report_submission_status", "report_review_status", "report_event_kind" CASCADE`,
+		),
+	);
+};
+/** @info - Drops what 0001 (and 0002, which depends on it) created, so a test can run it on an empty slice. */
+export const dropSliceObjects = async () => {
+	await dropReportObjects();
 	await getDb().execute(
 		sql.raw(
 			`ALTER TABLE "users" DROP CONSTRAINT IF EXISTS "users_last_workspace_fk"; ALTER TABLE "users" DROP COLUMN IF EXISTS "last_workspace_id"; DROP TABLE IF EXISTS "audit_logs", "invitations", "memberships", "spaces", "workspaces" CASCADE; DROP TYPE IF EXISTS "membership_role", "invitation_status", "workspace_plan" CASCADE`,
