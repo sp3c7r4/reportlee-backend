@@ -1,4 +1,5 @@
 export * from "./BadRequest";
+export * from "./CodedConflict";
 export * from "./CodedForbidden";
 export * from "./CodedRateLimit";
 export * from "./Conflict";

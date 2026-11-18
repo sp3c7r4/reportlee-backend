@@ -2,10 +2,14 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { ReasonPhrases, StatusCodes } from "http-status-codes";
+import { DrizzleQueryError } from "drizzle-orm/errors";
+import { CodedConflictError } from "@/errors/CodedConflict";
 import { CodedForbiddenError } from "@/errors/CodedForbidden";
 import { CodedRateLimitError } from "@/errors/CodedRateLimit";
 import { createConflictError } from "@/errors/Conflict";
 import { sendErrorResponse } from "@/helpers";
+import { pgErrorCode } from "@/helpers/pg-error";
+import { REPORT_MESSAGES } from "@/modules/report/report.message";
 
 interface ErrorObject {
 	status?: ContentfulStatusCode;
@@ -13,6 +17,21 @@ interface ErrorObject {
 }
 
 export const errorHandler = (err: any, c: Context) => {
+	/* @info - D25: a failed query's message holds the SQL and every bound value (report text
+	 * included). Answer a generic 500 and log only the pg code, method and path. */
+	if (err instanceof DrizzleQueryError) {
+		console.error("DB error", {
+			pgCode: pgErrorCode(err),
+			method: c.req.method,
+			path: c.req.path,
+		});
+		return sendErrorResponse(
+			c,
+			{ message: REPORT_MESSAGES.GENERIC },
+			StatusCodes.INTERNAL_SERVER_ERROR,
+		);
+	}
+
 	const errorObject: ErrorObject = {};
 
 	console.log("Error Stack", err);
@@ -79,8 +98,9 @@ export const errorHandler = (err: any, c: Context) => {
 		c,
 		{
 			message: errorObject.message || ReasonPhrases.INTERNAL_SERVER_ERROR,
-			/* @info - Only a coded 403 or 429 adds a field. Every other error body is just a message. */
+			/* @info - Only a coded 403, 409 or 429 adds a field. Every other error body is just a message. */
 			...((err instanceof CodedForbiddenError ||
+				err instanceof CodedConflictError ||
 				err instanceof CodedRateLimitError) && { code: err.code }),
 		},
 		errorObject.status || StatusCodes.INTERNAL_SERVER_ERROR,

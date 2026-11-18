@@ -8,6 +8,11 @@ import {
 	setLastWorkspace,
 } from "@/modules/membership/membership.repository";
 import type { Caller } from "@/modules/membership/membership.service";
+import {
+	ensureBaseline,
+	hasAnyPeriod,
+	lockPeriods,
+} from "@/modules/schedule/schedule.repository";
 import { UserService } from "@/modules/user/user.service";
 import { toMembershipDto, toWorkspaceDto } from "./workspace.dto";
 import { WORKSPACE_MESSAGES } from "./workspace.message";
@@ -109,8 +114,20 @@ export class WorkspaceService {
 		body: { name?: string; timeZone?: string; locationTagging?: boolean },
 	) =>
 		getDb().transaction(async (tx) => {
+			/* @info - D26, D31: a zone change must not move a stored period. The period lock comes
+			 * first, then the Workspace row. Once a period exists, the baseline row pins the old zone
+			 * for the Schedule. Before that, nothing is written, so the default follows the new zone. */
+			if (body.timeZone !== undefined) {
+				await lockPeriods(tx, caller.workspaceId);
+			}
 			const locked = await lockWorkspace(tx, caller.workspaceId);
 			if (!locked) return throwNotFoundError(WORKSPACE_MESSAGES.NOT_FOUND);
+			if (
+				body.timeZone !== undefined &&
+				(await hasAnyPeriod(tx, caller.workspaceId))
+			) {
+				await ensureBaseline(tx, caller.workspaceId, new Date());
+			}
 			const row = await updateWorkspace(tx, caller.workspaceId, body);
 			await this.audit.record(tx, {
 				workspaceId: caller.workspaceId,

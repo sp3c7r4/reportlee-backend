@@ -12,7 +12,11 @@ export type AuditAction =
 	| "member.reactivated"
 	| "member.joined"
 	| "invitation.sent"
-	| "invitation.revoked";
+	| "invitation.revoked"
+	| "report.submitted"
+	| "report.edited"
+	| "report.deleted"
+	| "schedule.change";
 
 export class AuditLogService {
 	private static instance: AuditLogService;

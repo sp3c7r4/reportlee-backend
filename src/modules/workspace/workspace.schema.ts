@@ -3,7 +3,7 @@ import { RESERVED_SLUGS, SLUG_PATTERN } from "@/constants/reserved-slugs";
 import { idString } from "@/helpers/id-schema";
 import { WORKSPACE_MESSAGES } from "./workspace.message";
 
-const timeZone = z
+export const timeZone = z
 	.string()
 	.min(1)
 	.max(64)
