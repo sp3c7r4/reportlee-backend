@@ -1,0 +1,25 @@
+[
+	{ "html": "<p>a &amp; b</p><p>c</p>", "text": "a & b c", "length": 7 },
+	{ "html": "", "text": "", "length": 0 },
+	{ "html": "<p></p>", "text": "", "length": 0 },
+	{ "html": "<p>  spaced   out  </p>", "text": "spaced out", "length": 10 },
+	{ "html": "<p>one<br>two</p>", "text": "one two", "length": 7 },
+	{ "html": "<ul><li>a</li><li>b</li></ul>", "text": "a b", "length": 3 },
+	{ "html": "<h2>Title</h2><p>Body</p>", "text": "Title Body", "length": 10 },
+	{
+		"html": "<p>&lt;tag&gt; &quot;q&quot; &#39;s&#39;</p>",
+		"text": "<tag> \"q\" 's'",
+		"length": 13
+	},
+	{ "html": "<p>non&nbsp;breaking</p>", "text": "non breaking", "length": 12 },
+	{
+		"html": "<p><strong>bold</strong> and <em>it</em></p>",
+		"text": "bold and it",
+		"length": 11
+	},
+	{
+		"html": "<p>caf\u00e9 \ud83d\ude00</p>",
+		"text": "caf\u00e9 \ud83d\ude00",
+		"length": 7
+	}
+]
