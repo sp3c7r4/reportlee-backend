@@ -7,6 +7,7 @@ import { CodedConflictError } from "@/errors/CodedConflict";
 import { CodedForbiddenError } from "@/errors/CodedForbidden";
 import { CodedRateLimitError } from "@/errors/CodedRateLimit";
 import { createConflictError } from "@/errors/Conflict";
+import { FieldError } from "@/errors/FieldError";
 import { sendErrorResponse } from "@/helpers";
 import { pgErrorCode } from "@/helpers/pg-error";
 import { REPORT_MESSAGES } from "@/modules/report/report.message";
@@ -30,6 +31,11 @@ export const errorHandler = (err: any, c: Context) => {
 			{ message: REPORT_MESSAGES.GENERIC },
 			StatusCodes.INTERNAL_SERVER_ERROR,
 		);
+	}
+
+	/* @info - A service field rule answers like Zod. Not logged: the fields can hold report text. */
+	if (err instanceof FieldError) {
+		return sendErrorResponse(c, err.fields, StatusCodes.BAD_REQUEST);
 	}
 
 	const errorObject: ErrorObject = {};

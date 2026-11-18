@@ -8,6 +8,7 @@ import {
 import { meRouter } from "@/modules/me";
 import { memberRouter } from "@/modules/membership";
 import { notificationRouter } from "@/modules/notifications";
+import { reportRouter } from "@/modules/report";
 import { periodRouter, scheduleRouter } from "@/modules/schedule";
 import { spaceRouter } from "@/modules/space";
 import { uploadRouter } from "@/modules/upload";
@@ -34,3 +35,4 @@ router.route("/workspaces/:wsId/invitations", workspaceInvitationRouter);
 router.route("/invitations", invitationRouter);
 router.route("/workspaces/:wsId/schedule", scheduleRouter);
 router.route("/reporting-periods", periodRouter);
+router.route("/reports", reportRouter);

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/postgres.db";
 import {
 	memberships,
+	reportingPeriods,
 	spaces,
 	user_roles,
 	users,
@@ -91,6 +92,27 @@ export const addMember = async (
 	return row;
 };
 
+/** @info - A stored reporting period. Tests seed periods directly to reach past, closed and future cases. */
+export const createPeriod = async (
+	workspaceId: number,
+	startsAt: string,
+	endsAt: string,
+	dueAt: string,
+	label = "Test period",
+) => {
+	const [row] = await getDb()
+		.insert(reportingPeriods)
+		.values({
+			workspaceId,
+			label,
+			startsAt: new Date(startsAt),
+			endsAt: new Date(endsAt),
+			dueAt: new Date(dueAt),
+		})
+		.returning();
+	if (!row) throw new Error("period insert failed");
+	return row;
+};
 /** @info - A workspace with one Admin, one Space, a Head and a Staff member in it. */
 export const createTeam = async () => {
 	const admin = await createUser();

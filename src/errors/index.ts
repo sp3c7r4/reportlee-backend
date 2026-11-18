@@ -2,6 +2,7 @@ export * from "./BadRequest";
 export * from "./CodedConflict";
 export * from "./CodedForbidden";
 export * from "./CodedRateLimit";
+export * from "./FieldError";
 export * from "./Conflict";
 export * from "./Forbidden";
 export * from "./Gone";
