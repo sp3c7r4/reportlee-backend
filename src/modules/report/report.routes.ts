@@ -49,3 +49,4 @@ reportRouter.patch(
 );
 reportRouter.delete("/:id", ...byId, controller.remove);
 reportRouter.post("/:id/submit", ...byId, controller.submit);
+reportRouter.post("/:id/seen", ...byId, controller.seen);

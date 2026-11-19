@@ -12,7 +12,9 @@ import {
 } from "./report.repository";
 import { notFound, resolveOrNotFound } from "./scope";
 
-export type Relation = "author" | "reviewer" | "none";
+/* @info - "reviewer" is the designated reviewer (V1). "admin" is any other Admin of the Workspace
+ * (V2): may read and decide, never marks seen and never starts a thread. */
+export type Relation = "author" | "reviewer" | "admin" | "none";
 export interface Access {
 	report: ReportRow;
 	caller: Caller;
@@ -69,9 +71,10 @@ export class ReportAccess {
 	};
 
 	/**
-	 * @info - `reviewersFor` in the frontend, applied literally (A7, A9): the current Head of the
-	 * report's Space, or an Admin when that Space has no Head or the author is a Head. Drafts have
-	 * no reviewer.
+	 * @info - V1, with the AUTHOR's role checked first: a Head's report always goes to the Admins,
+	 * never to another Head, even the Head of the Space it was written in. Otherwise the current
+	 * Head of the report's Space reviews, or the Admins when that Space has no Head. Any Admin who
+	 * is not the designated reviewer gets "admin" (V2). Drafts have no reviewer.
 	 */
 	relation = async (
 		tx: Tx,
@@ -81,13 +84,11 @@ export class ReportAccess {
 		if (caller.membershipId === report.authorMembershipId) return "author";
 		if (report.submissionStatus === "draft") return "none";
 		const space = await spaceHead(tx, report.spaceId);
-		if (space?.head === caller.membershipId) return "reviewer";
-		if (caller.role === "admin") {
-			if (space?.head === null || space?.head === undefined) return "reviewer";
-			if ((await membershipRole(tx, report.authorMembershipId)) === "head") {
-				return "reviewer";
-			}
-		}
+		const authorIsHead =
+			(await membershipRole(tx, report.authorMembershipId)) === "head";
+		const adminsReview = !space?.head || authorIsHead;
+		if (!adminsReview && space?.head === caller.membershipId) return "reviewer";
+		if (caller.role === "admin") return adminsReview ? "reviewer" : "admin";
 		return "none";
 	};
 
@@ -126,7 +127,20 @@ export class ReportAccess {
 
 	private assertAuthor = (access: Access) => {
 		if (access.relation === "none") notFound();
-		if (access.relation === "reviewer") forbid("NOT_AUTHOR");
+		if (access.relation !== "author") forbid("NOT_AUTHOR");
+	};
+
+	/**
+	 * @info - E12. Only the designated reviewer starts the author's lock (D9, D10). A draft is 404
+	 * for everyone, the author included. The author and a non-designated Admin know the report
+	 * exists, so they get 403. Runs on the row locked FOR UPDATE.
+	 */
+	assertSeen = async (tx: Tx, userId: number, reportId: number) => {
+		const access = await this.load(tx, userId, reportId, true);
+		if (access.report.submissionStatus === "draft") return notFound();
+		if (access.relation === "none") return notFound();
+		if (access.relation !== "reviewer") forbid("NOT_REVIEWER");
+		return access;
 	};
 
 	/** @info - E9. A draft is served only by E5 (D24), so it is 404 here for everyone. */

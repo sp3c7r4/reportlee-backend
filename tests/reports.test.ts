@@ -603,7 +603,9 @@ describe("reports", () => {
 				404,
 			);
 		});
-		it("lets an Admin read a Head's report, and a Staff report only when the Space has no Head", async () => {
+		/* @info - Changed on purpose for V2 (an Admin may read and decide any submitted report of the
+		 * Workspace): it used to expect 404 for a Staff report in a headed Space. */
+		it("lets an Admin read a Head's report and a Staff report, with or without a Head in the Space", async () => {
 			const headReport = await submitted(team.headUser.id);
 			expect(
 				(await req(team.admin.id, "GET", `/reports/${headReport}`)).status,
@@ -611,7 +613,7 @@ describe("reports", () => {
 			const staffReport = await submitted();
 			expect(
 				(await req(team.admin.id, "GET", `/reports/${staffReport}`)).status,
-			).toBe(404);
+			).toBe(200);
 			await q(
 				`update spaces set head_membership_id = null where id = ${team.space.id}`,
 			);

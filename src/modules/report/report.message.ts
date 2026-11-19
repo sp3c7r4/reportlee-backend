@@ -3,6 +3,7 @@ export const REPORT_MESSAGES = {
 	NOT_FOUND: "Not found.",
 	GENERIC: "Something went wrong. Try again.",
 	NOT_AUTHOR: "Only the author can do this.",
+	NOT_REVIEWER: "Only a reviewer of this report can mark it seen.",
 	ADMIN_CANNOT_AUTHOR: "Admins review reports and do not submit them.",
 	WORKSPACE_READ_ONLY:
 		"This Workspace is read-only. You can read reports but not submit them.",
@@ -25,6 +26,7 @@ export const REPORT_MESSAGES = {
 
 export const REPORT_CODES = {
 	NOT_AUTHOR: "NOT_AUTHOR",
+	NOT_REVIEWER: "NOT_REVIEWER",
 	ADMIN_CANNOT_AUTHOR: "ADMIN_CANNOT_AUTHOR",
 	WORKSPACE_READ_ONLY: "WORKSPACE_READ_ONLY",
 	NO_SPACE: "NO_SPACE",

@@ -102,16 +102,47 @@ export const insertRevision = async (
 	await tx.insert(reportRevisions).values({ reportId, previous, createdAt });
 };
 
+/** @info - Returns the new event id: the decision email uses it as its idempotency key. */
 export const insertEvent = async (
 	tx: Tx,
 	reportId: number,
 	kind: ReportEventKind,
 	actorMembershipId: number,
 	createdAt: Date,
-) => {
-	await tx
+): Promise<number> => {
+	const [row] = await tx
 		.insert(reportEvents)
-		.values({ reportId, kind, actorMembershipId, createdAt });
+		.values({ reportId, kind, actorMembershipId, createdAt })
+		.returning({ id: reportEvents.id });
+	if (!row) throw new Error("event insert returned no row");
+	return row.id;
+};
+
+/**
+ * @info - The one writer of `firstSeenAt` and `windowStartedAt` besides edit (D11, D12). Idempotent:
+ * each column is set only when empty. `startWindow: false` (an Admin who is not the designated
+ * reviewer, and reopen) sets `firstSeenAt` so delete stays locked but never starts the author's
+ * lock. `event` decides when the timeline gets a `seen` entry: "window" for the explicit look (a
+ * new window), "first" for a decision or comment (only the first time the report is seen).
+ */
+export const markSeen = async (
+	tx: Tx,
+	report: ReportRow,
+	actorMembershipId: number,
+	now: Date,
+	options: { startWindow: boolean; event: "window" | "first" },
+): Promise<ReportRow> => {
+	const first = report.firstSeenAt === null;
+	const start = options.startWindow && report.windowStartedAt === null;
+	if (!first && !start) return report;
+	const row = await updateReport(tx, report.id, {
+		...(first && { firstSeenAt: now }),
+		...(start && { windowStartedAt: now }),
+	});
+	if (options.event === "window" ? start : first) {
+		await insertEvent(tx, report.id, "seen", actorMembershipId, now);
+	}
+	return row;
 };
 
 /** @info - Batched: one query for every report on a page (no N+1). */

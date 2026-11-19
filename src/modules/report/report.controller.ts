@@ -64,6 +64,11 @@ export class ReportController {
 		return sendSuccessResponse(c, data, StatusCodes.OK, quiet);
 	};
 
+	seen = async (c: Context) => {
+		const data = await this.service.seen(callerId(c), this.id(c), new Date());
+		return sendSuccessResponse(c, data, StatusCodes.OK, quiet);
+	};
+
 	remove = async (c: Context) => {
 		await this.service.remove(callerId(c), this.id(c), new Date());
 		return c.body(null, StatusCodes.NO_CONTENT);

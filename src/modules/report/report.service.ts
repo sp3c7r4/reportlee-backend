@@ -23,6 +23,7 @@ import {
 	insertRevision,
 	listOwn,
 	lockLiveFor,
+	markSeen,
 	revisionsFor,
 	spaceHead,
 	updateReport,
@@ -312,6 +313,24 @@ export class ReportService {
 				target: `report:${report.id}`,
 				summary: `Report ${report.id} deleted`,
 			});
+		});
+
+	/** @info - E12. D10, D11: idempotent, so a repeat call returns the stored times. */
+	seen = async (userId: number, reportId: number, now: Date) =>
+		getDb().transaction(async (tx) => {
+			const { report, caller } = await this.access.assertSeen(
+				tx,
+				userId,
+				reportId,
+			);
+			const row = await markSeen(tx, report, caller.membershipId, now, {
+				startWindow: true,
+				event: "window",
+			});
+			return {
+				firstSeenAt: (row.firstSeenAt as Date).toISOString(),
+				windowStartedAt: (row.windowStartedAt as Date).toISOString(),
+			};
 		});
 
 	/** @info - E9. */
