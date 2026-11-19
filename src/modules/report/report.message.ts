@@ -4,6 +4,10 @@ export const REPORT_MESSAGES = {
 	GENERIC: "Something went wrong. Try again.",
 	NOT_AUTHOR: "Only the author can do this.",
 	NOT_REVIEWER: "Only a reviewer of this report can mark it seen.",
+	NOT_AUTHOR_CANNOT_DECIDE: "Nobody can decide on their own report.",
+	NOT_APPROVED: "Only an approved report can be reopened.",
+	APPROVED_REOPEN_FIRST: "This report is approved. Reopen it first.",
+	DRAFT_CANNOT_DECIDE: "Submit this report before it can be reviewed.",
 	ADMIN_CANNOT_AUTHOR: "Admins review reports and do not submit them.",
 	WORKSPACE_READ_ONLY:
 		"This Workspace is read-only. You can read reports but not submit them.",
@@ -27,6 +31,10 @@ export const REPORT_MESSAGES = {
 export const REPORT_CODES = {
 	NOT_AUTHOR: "NOT_AUTHOR",
 	NOT_REVIEWER: "NOT_REVIEWER",
+	NOT_AUTHOR_CANNOT_DECIDE: "NOT_AUTHOR_CANNOT_DECIDE",
+	NOT_APPROVED: "NOT_APPROVED",
+	APPROVED_REOPEN_FIRST: "REPORT_APPROVED",
+	DRAFT_CANNOT_DECIDE: "NOT_SUBMITTED",
 	ADMIN_CANNOT_AUTHOR: "ADMIN_CANNOT_AUTHOR",
 	WORKSPACE_READ_ONLY: "WORKSPACE_READ_ONLY",
 	NO_SPACE: "NO_SPACE",

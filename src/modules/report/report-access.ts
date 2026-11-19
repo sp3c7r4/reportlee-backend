@@ -143,6 +143,43 @@ export class ReportAccess {
 		return access;
 	};
 
+	/**
+	 * @info - E13, the binding order (D1 to D3). Runs on the row locked FOR UPDATE, so two
+	 * simultaneous decisions serialize and the second sees the new state. `workspaceId` is the bulk
+	 * route's claim: a report of another Workspace is 404 even for an Admin who belongs to both.
+	 * Staff and a Head who is not the designated reviewer get 404, so they learn nothing.
+	 */
+	assertDecide = async (
+		tx: Tx,
+		userId: number,
+		reportId: number,
+		decision: "approve" | "reject" | "reopen",
+		workspaceId?: number,
+	) => {
+		const access = await this.load(tx, userId, reportId, true);
+		const { report, caller, relation } = access;
+		if (workspaceId !== undefined && report.workspaceId !== workspaceId) {
+			return notFound();
+		}
+		if (report.submissionStatus === "draft") {
+			if (relation === "author") conflict("DRAFT_CANNOT_DECIDE");
+			return notFound();
+		}
+		if (relation === "author") forbid("NOT_AUTHOR_CANNOT_DECIDE");
+		if (caller.role === "staff") return notFound();
+		if (relation !== "reviewer" && relation !== "admin") return notFound();
+		const workspace = await findWorkspace(tx, caller.workspaceId);
+		if (!workspace) return notFound();
+		if (workspace.readOnly) forbid("WORKSPACE_READ_ONLY");
+		if (report.reviewStatus === "approved" && decision !== "reopen") {
+			conflict("APPROVED_REOPEN_FIRST");
+		}
+		if (decision === "reopen" && report.reviewStatus !== "approved") {
+			conflict("NOT_APPROVED");
+		}
+		return access;
+	};
+
 	/** @info - E9. A draft is served only by E5 (D24), so it is 404 here for everyone. */
 	assertRead = async (tx: Tx, userId: number, reportId: number) => {
 		const access = await this.load(tx, userId, reportId, false);

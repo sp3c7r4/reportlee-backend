@@ -2,6 +2,7 @@ import { getDb, getReader, type Tx } from "@/db/postgres.db";
 import { CodedConflictError, FieldError } from "@/errors";
 import { AuditLogService } from "@/modules/audit/audit-log.service";
 import type { Caller } from "@/modules/membership/membership.service";
+import { commentsFor } from "@/modules/report-comment/report-comment.repository";
 import { isClosed } from "@/modules/schedule/period-calendar";
 import type { ReportingPeriodRow } from "@/modules/schedule/schedule.model";
 import { findPeriodById } from "@/modules/schedule/schedule.repository";
@@ -153,25 +154,25 @@ export class ReportService {
 		return caller.spaceId;
 	};
 
-	private withHistory = async (
-		tx: Tx,
-		rows: ReportRow[],
-	): Promise<ReportDto[]> => {
+	/** @info - Public: the review module builds its responses with the same batched loader (three queries, no N+1). */
+	withHistory = async (tx: Tx, rows: ReportRow[]): Promise<ReportDto[]> => {
 		const ids = rows.map((r) => r.id);
-		const [revisions, events] = await Promise.all([
+		const [revisions, events, comments] = await Promise.all([
 			revisionsFor(tx, ids),
 			eventsFor(tx, ids),
+			commentsFor(tx, ids),
 		]);
 		return rows.map((r) =>
 			toReportDto(
 				r,
 				revisions.filter((v) => v.reportId === r.id),
 				events.filter((e) => e.reportId === r.id),
+				comments.filter((c) => c.reportId === r.id),
 			),
 		);
 	};
 
-	private one = async (tx: Tx, row: ReportRow) =>
+	one = async (tx: Tx, row: ReportRow) =>
 		(await this.withHistory(tx, [row]))[0] as ReportDto;
 
 	/** @info - E5. The caller's live draft, or null when there is none or it is submitted (D24b). */

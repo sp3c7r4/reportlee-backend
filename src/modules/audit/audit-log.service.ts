@@ -16,6 +16,10 @@ export type AuditAction =
 	| "report.submitted"
 	| "report.edited"
 	| "report.deleted"
+	| "report.decided"
+	| "report.reopened"
+	| "task.created"
+	| "task.moved"
 	| "schedule.change";
 
 export class AuditLogService {

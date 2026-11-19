@@ -1,3 +1,8 @@
+import {
+	type CommentDto,
+	toCommentDto,
+} from "@/modules/report-comment/report-comment.dto";
+import type { CommentWithTask } from "@/modules/report-comment/report-comment.repository";
 import type {
 	ReportAttachment,
 	ReportContentSnapshot,
@@ -34,7 +39,7 @@ export interface RevisionContentDto {
 	location: ReportLocation | null;
 }
 
-/** @info - Mirrors `Report`. `comments` is always [] until the review slice. */
+/** @info - Mirrors `Report`. `comments` holds comments and decision reasons, oldest first. */
 export interface ReportDto extends ReportDraftDto {
 	submittedAt: string;
 	firstSeenAt: string | null;
@@ -42,7 +47,7 @@ export interface ReportDto extends ReportDraftDto {
 	editWindowMinutes: number;
 	revisions: { at: string; previous: RevisionContentDto }[];
 	events: { kind: ReportEventKind; at: string; actorMembershipId: string }[];
-	comments: [];
+	comments: CommentDto[];
 }
 
 /* @info - Metadata only, nothing is uploaded in this slice (D14). */
@@ -82,6 +87,7 @@ export const toReportDto = (
 		createdAt: Date;
 		actorMembershipId: number;
 	}[],
+	comments: CommentWithTask[],
 ): ReportDto => ({
 	...toDraftDto(r),
 	submittedAt: (r.submittedAt as Date).toISOString(),
@@ -97,7 +103,7 @@ export const toReportDto = (
 		at: e.createdAt.toISOString(),
 		actorMembershipId: String(e.actorMembershipId),
 	})),
-	comments: [],
+	comments: comments.map(toCommentDto),
 });
 
 export const snapshotOf = (r: ReportRow): ReportContentSnapshot => ({
