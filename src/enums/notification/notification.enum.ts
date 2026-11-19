@@ -3,4 +3,8 @@
 export enum NotificationType {
 	SYSTEM = "system",
 	ACCOUNT = "account",
+	DECISION = "decision",
+	COMMENT = "comment",
+	TASK = "task",
+	SUBMISSION = "submission",
 }

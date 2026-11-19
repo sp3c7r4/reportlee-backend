@@ -11,7 +11,9 @@ import {
 import { userRoleEnum } from "@/bases/models/base.user.model";
 import { NotificationType, TableNames } from "@/enums";
 import { timestamps } from "@/models/timestamps.b.model";
+import { memberships } from "@/modules/membership/membership.model";
 import { users } from "@/modules/user/user.model";
+import { workspaces } from "@/modules/workspace/workspace.model";
 
 export const notificationTypeEnum = pgEnum(
 	"notification_type",
@@ -31,6 +33,14 @@ export const notifications = pgTable(
 		title: varchar("title", { length: 255 }).notNull(),
 		message: varchar("message", { length: 1000 }).notNull(),
 		metadata: jsonb("metadata").default({}),
+		/* @info - Added by 0003, all nullable. Rows written before it have no workspace and show only when no workspace filter is given. */
+		workspaceId: integer("workspace_id").references(() => workspaces.id, {
+			onDelete: "cascade",
+		}),
+		membershipId: integer("membership_id").references(() => memberships.id, {
+			onDelete: "set null",
+		}),
+		href: varchar("href", { length: 255 }),
 		readAt: timestamp("read_at"),
 		...timestamps,
 	},
@@ -38,6 +48,11 @@ export const notifications = pgTable(
 		index("idx_notifications_user").on(table.userId),
 		index("idx_notifications_type").on(table.type),
 		index("idx_notifications_read_at").on(table.readAt),
+		index("notifications_user_ws_read_idx").on(
+			table.userId,
+			table.workspaceId,
+			table.readAt,
+		),
 	],
 );
 
