@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import type { Tx } from "@/db/postgres.db";
 import { tasks } from "@/modules/task/task.model";
 import {
@@ -47,3 +47,22 @@ export const commentsFor = async (
 				.leftJoin(tasks, eq(tasks.commentId, reportComments.id))
 				.where(inArray(reportComments.reportId, reportIds))
 				.orderBy(asc(reportComments.createdAt), asc(reportComments.id));
+
+/** @info - V5: true when someone other than `authorMembershipId` wrote on the report (either kind), so the author may reply. */
+export const hasEntryFromOthers = async (
+	tx: Tx,
+	reportId: number,
+	authorMembershipId: number,
+): Promise<boolean> => {
+	const [row] = await tx
+		.select({ id: reportComments.id })
+		.from(reportComments)
+		.where(
+			and(
+				eq(reportComments.reportId, reportId),
+				ne(reportComments.authorMembershipId, authorMembershipId),
+			),
+		)
+		.limit(1);
+	return Boolean(row);
+};

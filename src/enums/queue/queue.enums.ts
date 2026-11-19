@@ -12,4 +12,5 @@ export enum EmailJobNames {
 	RESET_PASSWORD = "reset-password",
 	VERIFY_OTP = "verify-otp",
 	INVITATION = "invitation",
+	DECISION = "decision",
 }

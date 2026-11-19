@@ -27,6 +27,8 @@ export class NotificationService {
 		title: string,
 		message: string,
 		metadata?: Record<string, unknown>,
+		/* @info - Added by the review slice (D16), optional so existing callers are unchanged. */
+		extra?: { workspaceId?: number; membershipId?: number; href?: string },
 	): Promise<void> => {
 		try {
 			const db = getDb();
@@ -43,6 +45,9 @@ export class NotificationService {
 				title,
 				message,
 				metadata: (metadata ?? {}) as any,
+				workspaceId: extra?.workspaceId ?? null,
+				membershipId: extra?.membershipId ?? null,
+				href: extra?.href ?? null,
 			};
 			const [row] = (await db
 				.insert(notifications)
@@ -66,6 +71,11 @@ export class NotificationService {
 							metadata: row.metadata ?? {},
 							read: false,
 							createdAt: row.createdAt,
+							workspaceId:
+								row.workspaceId === null || row.workspaceId === undefined
+									? null
+									: String(row.workspaceId),
+							href: row.href ?? null,
 						},
 					},
 				});
@@ -77,26 +87,37 @@ export class NotificationService {
 		}
 	};
 
+	/** @info - The caller's rows, in one Workspace when `workspaceId` is given (rows written before
+	 * 0003 have none and show only without the filter). */
+	private mine = (userId: number, workspaceId?: number) =>
+		workspaceId === undefined
+			? eq(notifications.userId, userId)
+			: and(
+					eq(notifications.userId, userId),
+					eq(notifications.workspaceId, workspaceId),
+				);
+
 	listMine = async (
 		userId: number,
-		params?: { page?: number; limit?: number },
+		params?: { page?: number; limit?: number; workspaceId?: number },
 	) => {
 		const db = getDb();
 		const page = Math.max(1, params?.page ?? 1);
 		const limit = Math.min(50, Math.max(1, params?.limit ?? 20));
+		const where = this.mine(userId, params?.workspaceId);
 
 		const [rows, totalRows] = await Promise.all([
 			db
 				.select()
 				.from(notifications)
-				.where(eq(notifications.userId, userId))
-				.orderBy(desc(notifications.createdAt))
+				.where(where)
+				.orderBy(desc(notifications.createdAt), desc(notifications.id))
 				.limit(limit)
 				.offset((page - 1) * limit) as any,
 			db
 				.select({ total: notifications.id })
 				.from(notifications)
-				.where(eq(notifications.userId, userId)) as any,
+				.where(where) as any,
 		]);
 
 		return {
@@ -108,6 +129,8 @@ export class NotificationService {
 				metadata: n.metadata ?? {},
 				read: !!n.readAt,
 				createdAt: n.createdAt,
+				workspaceId: n.workspaceId === null ? null : String(n.workspaceId),
+				href: n.href ?? null,
 			})),
 			total: totalRows.length,
 			page,
@@ -115,13 +138,13 @@ export class NotificationService {
 		};
 	};
 
-	unreadCount = async (userId: number) => {
+	unreadCount = async (userId: number, workspaceId?: number) => {
 		const db = getDb();
 		const rows = (await db
 			.select({ id: notifications.id })
 			.from(notifications)
 			.where(
-				and(eq(notifications.userId, userId), isNull(notifications.readAt)),
+				and(this.mine(userId, workspaceId), isNull(notifications.readAt)),
 			)) as any[];
 		return rows.length;
 	};
@@ -136,13 +159,11 @@ export class NotificationService {
 		return !!row;
 	};
 
-	markAllRead = async (userId: number) => {
+	markAllRead = async (userId: number, workspaceId?: number) => {
 		const db = getDb();
 		await db
 			.update(notifications)
 			.set({ readAt: new Date() })
-			.where(
-				and(eq(notifications.userId, userId), isNull(notifications.readAt)),
-			);
+			.where(and(this.mine(userId, workspaceId), isNull(notifications.readAt)));
 	};
 }

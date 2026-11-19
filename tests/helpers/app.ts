@@ -4,6 +4,7 @@
  */
 import "./auth";
 import { Hono } from "hono";
+import { PubSubService } from "@/services/pubsub.service";
 import { EmailQueueService } from "@/services/queues/email.queue.service";
 
 export interface RecordedJob {
@@ -23,7 +24,15 @@ export const queueBehaviour = { fail: false };
 	},
 };
 
+/* @info - Realtime push is replaced with a recorder: the cache fake has no Redis client. */
+export const published: { userId: number; envelope: any }[] = [];
+(PubSubService as unknown as { instance: unknown }).instance = {
+	publishUser: async (userId: number, envelope: unknown) => {
+		published.push({ userId, envelope });
+	},
+};
 export const resetQueue = () => {
+	published.length = 0;
 	emailJobs.length = 0;
 	queueBehaviour.fail = false;
 };

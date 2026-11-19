@@ -5,4 +5,5 @@ export enum EmailTemplates {
 	VERIFY_OTP = "verify-otp",
 	RESET_PASSWORD = "reset-password",
 	INVITATION = "invitation",
+	DECISION = "decision",
 }

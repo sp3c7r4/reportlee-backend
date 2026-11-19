@@ -67,6 +67,12 @@ export const EnvSchema = z
 			(v) => (v === "" ? undefined : v),
 			z.stringbool().optional(),
 		),
+		/* @info - V8: email the author when a report is approved or rejected. "false" turns it off
+		 * (stringbool, not coerce, which reads "false" as true). Empty counts as unset. */
+		DECISION_EMAILS_ENABLED: z.preprocess(
+			(v) => (v === "" ? undefined : v),
+			z.stringbool().default(true),
+		),
 		SMTP_USER: z.string().optional(),
 		SMTP_PASS: z.string().optional(),
 

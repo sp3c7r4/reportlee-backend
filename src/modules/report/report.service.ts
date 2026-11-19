@@ -2,6 +2,7 @@ import { getDb, getReader, type Tx } from "@/db/postgres.db";
 import { CodedConflictError, FieldError } from "@/errors";
 import { AuditLogService } from "@/modules/audit/audit-log.service";
 import type { Caller } from "@/modules/membership/membership.service";
+import { ReviewNotifier } from "@/modules/notifications/report-events";
 import { commentsFor } from "@/modules/report-comment/report-comment.repository";
 import { isClosed } from "@/modules/schedule/period-calendar";
 import type { ReportingPeriodRow } from "@/modules/schedule/schedule.model";
@@ -237,7 +238,21 @@ export class ReportService {
 		userId: number,
 		reportId: number,
 		now: Date,
-	): Promise<ReportDto> =>
+	): Promise<ReportDto> => {
+		const { dto, workspaceId } = await this.submitIn(userId, reportId, now);
+		/* @info - V7: after commit, the reviewers are told. Never throws. */
+		await ReviewNotifier.getInstance().submission({
+			workspaceId,
+			reportId: Number(dto.id),
+		});
+		return dto;
+	};
+
+	private submitIn = async (
+		userId: number,
+		reportId: number,
+		now: Date,
+	): Promise<{ dto: ReportDto; workspaceId: number }> =>
 		getDb().transaction(async (tx) => {
 			const { report, caller, workspace } = await this.access.assertSubmit(
 				tx,
@@ -264,7 +279,7 @@ export class ReportService {
 				target: `report:${row.id}`,
 				summary: `Report ${row.id} ${row.submissionStatus}`,
 			});
-			return this.one(tx, row);
+			return { dto: await this.one(tx, row), workspaceId: row.workspaceId };
 		});
 
 	/** @info - E10 (R3). Each edit stores the previous content, returns to pending and clears the window (A1). */

@@ -5,6 +5,9 @@ export const REPORT_MESSAGES = {
 	NOT_AUTHOR: "Only the author can do this.",
 	NOT_REVIEWER: "Only a reviewer of this report can mark it seen.",
 	NOT_AUTHOR_CANNOT_DECIDE: "Nobody can decide on their own report.",
+	NOT_REVIEWER_COMMENT: "Only a reviewer of this report can start a comment.",
+	REVIEWER_MUST_START:
+		"A reviewer starts the conversation. You can reply once they write.",
 	NOT_APPROVED: "Only an approved report can be reopened.",
 	APPROVED_REOPEN_FIRST: "This report is approved. Reopen it first.",
 	DRAFT_CANNOT_DECIDE: "Submit this report before it can be reviewed.",
@@ -32,6 +35,8 @@ export const REPORT_CODES = {
 	NOT_AUTHOR: "NOT_AUTHOR",
 	NOT_REVIEWER: "NOT_REVIEWER",
 	NOT_AUTHOR_CANNOT_DECIDE: "NOT_AUTHOR_CANNOT_DECIDE",
+	NOT_REVIEWER_COMMENT: "NOT_REVIEWER",
+	REVIEWER_MUST_START: "REVIEWER_MUST_START",
 	NOT_APPROVED: "NOT_APPROVED",
 	APPROVED_REOPEN_FIRST: "REPORT_APPROVED",
 	DRAFT_CANNOT_DECIDE: "NOT_SUBMITTED",

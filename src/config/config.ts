@@ -64,6 +64,9 @@ export const config = {
 
 	frontendUrl: env.FRONTEND_URL,
 
+	/* @info - Read at send time, so a test can switch it. */
+	decisionEmailsEnabled: env.DECISION_EMAILS_ENABLED,
+
 	encryption: {
 		key: env.ENCRYPTION_KEY,
 	},

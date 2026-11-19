@@ -2,6 +2,7 @@ import { HTTPException } from "hono/http-exception";
 import { getDb, getReader, type Tx } from "@/db/postgres.db";
 import { CodedConflictError, CodedForbiddenError, FieldError } from "@/errors";
 import { AuditLogService } from "@/modules/audit/audit-log.service";
+import { ReviewNotifier } from "@/modules/notifications/report-events";
 import type { ReportDto } from "@/modules/report/report.dto";
 import type { ReportEventKind } from "@/modules/report/report.model";
 import {
@@ -89,6 +90,7 @@ export class ReviewService {
 	private readonly access = ReportAccess.getInstance();
 	private readonly reports = ReportService.getInstance();
 	private readonly audit = AuditLogService.getInstance();
+	private readonly notifier = ReviewNotifier.getInstance();
 	static getInstance() {
 		if (!this.instance) this.instance = new ReviewService();
 		return this.instance;
@@ -158,11 +160,29 @@ export class ReviewService {
 		reportId: number,
 		body: DecisionBody,
 		now: Date,
-	): Promise<ReportDto> =>
-		getDb().transaction(async (tx) => {
-			const { row } = await this.decideIn(tx, userId, reportId, body, now);
-			return this.reports.one(tx, row);
+	): Promise<ReportDto> => {
+		const { done, dto } = await getDb().transaction(async (tx) => {
+			const done = await this.decideIn(tx, userId, reportId, body, now);
+			return { done, dto: await this.reports.one(tx, done.row) };
 		});
+		await this.afterCommit(done);
+		return dto;
+	};
+
+	/** @info - D17: notifications and the decision email only after the decision is committed. Never throws. */
+	private afterCommit = async (done: {
+		row: { id: number; workspaceId: number; authorMembershipId: number };
+		eventId: number;
+		decision: Decision;
+	}) => {
+		await this.notifier.decision({
+			workspaceId: done.row.workspaceId,
+			reportId: done.row.id,
+			authorMembershipId: done.row.authorMembershipId,
+			kind: EVENT_FOR[done.decision] as "approved" | "rejected" | "reopened",
+			eventId: done.eventId,
+		});
+	};
 
 	/** @info - E15. Staff are refused before anything else is read. */
 	queue = async (userId: number, query: QueueQuery) => {
@@ -222,7 +242,7 @@ export class ReviewService {
 		const skipped: { id: string; code: string }[] = [];
 		for (const id of ids) {
 			try {
-				await getDb().transaction((tx) =>
+				const done = await getDb().transaction((tx) =>
 					this.decideIn(
 						tx,
 						userId,
@@ -233,6 +253,7 @@ export class ReviewService {
 					),
 				);
 				approved.push(String(id));
+				await this.afterCommit(done);
 			} catch (e) {
 				const code = skipCode(e);
 				if (code === REVIEW_CODES.INTERNAL) {

@@ -1,6 +1,7 @@
 import type { Tx } from "@/db/postgres.db";
 import { CodedConflictError, CodedForbiddenError } from "@/errors";
 import type { Caller } from "@/modules/membership/membership.service";
+import { hasEntryFromOthers } from "@/modules/report-comment/report-comment.repository";
 import { findWorkspace } from "@/modules/workspace/workspace.repository";
 import { REPORT_CODES, REPORT_MESSAGES } from "./report.message";
 import type { ReportRow } from "./report.model";
@@ -176,6 +177,30 @@ export class ReportAccess {
 		}
 		if (decision === "reopen" && report.reviewStatus !== "approved") {
 			conflict("NOT_APPROVED");
+		}
+		return access;
+	};
+
+	/**
+	 * @info - E14. State is NOT checked: an approved report still takes comments and tasks, because
+	 * they do not change its content (design review, finding 3). The designated reviewer starts a
+	 * thread. The author replies only after someone else wrote. A non-designated Admin is a reader.
+	 */
+	assertComment = async (tx: Tx, userId: number, reportId: number) => {
+		const access = await this.load(tx, userId, reportId, true);
+		if (access.report.submissionStatus === "draft") return notFound();
+		if (access.relation === "none") return notFound();
+		const workspace = await findWorkspace(tx, access.caller.workspaceId);
+		if (!workspace) return notFound();
+		if (workspace.readOnly) forbid("WORKSPACE_READ_ONLY");
+		if (access.relation === "admin") forbid("NOT_REVIEWER_COMMENT");
+		if (access.relation === "author") {
+			const replied = await hasEntryFromOthers(
+				tx,
+				access.report.id,
+				access.caller.membershipId,
+			);
+			if (!replied) forbid("REVIEWER_MUST_START");
 		}
 		return access;
 	};
